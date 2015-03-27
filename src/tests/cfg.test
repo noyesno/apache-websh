@@ -1,0 +1,204 @@
+#
+# cfg.test -- test web::config
+# nca-073-9
+# 
+# Copyright (c) 1996-2000 by Netcetera AG.
+# Copyright (c) 2001 by Apache Software Foundation.
+# All rights reserved.
+#
+# See the file "license.terms" for information on usage and
+# redistribution of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# @(#) $Id: cfg.test 814622 2009-09-14 12:59:07Z ronnie $
+#
+
+# -----------------------------------------------------------------------------
+# tcltest package
+# -----------------------------------------------------------------------------
+if {[lsearch [namespace children] ::tcltest] == -1} {
+    package require tcltest
+    namespace import ::tcltest::*
+}
+
+web::config cmdurltimestamp 1
+
+# -----------------------------------------------------------------------------
+# errors
+# -----------------------------------------------------------------------------
+test cfg-1.1 {wrong subcommand} {
+    catch {web::config foo bar} msg
+    set msg
+} {bad subcommand "foo": must be uploadfilesize, encryptchain, decryptchain, cmdparam, timeparam, putxmarkup, logsubst, safelog, version, copyright, cmdurltimestamp, reset, script, server_root, document_root, interpclass, or filepermissions}
+
+
+test cfg-1.2 {invalid value} {
+    catch {web::config uploadfilesize large} msg
+    set msg
+} {web::config uploadfilesize only accepts integers but got "large"}
+##fixme: whats the return value here? expected integer but got "large"
+
+# -----------------------------------------------------------------------------
+# tests
+# -----------------------------------------------------------------------------
+test cfg-2.1 {uploadfilesize set/get} {
+    set res ""
+    lappend res [web::config uploadfilesize 13]
+    lappend res [web::config uploadfilesize]
+    lappend res [web::config uploadfilesize 0]
+    lappend res [web::config uploadfilesize]
+} {0 13 13 0}
+
+test cfg-2.2 {default return values} {
+    set res [list [web::config uploadfilesize] [web::config cmdparam] [web::config timeparam]]
+} {0 cmd t}
+
+test cfg-2.2a {return values when new value is set and reset} {
+    set res {}
+    lappend res [list [web::config uploadfilesize 1] [web::config cmdparam page] [web::config timeparam f] [web::config cmdurltimestamp 0] [web::config logsubst 1] [web::config safelog 0] [web::config putxmarkup tag] [web::config encryptchain foo] [web::config decryptchain bar]]
+    lappend res [list [web::config uploadfilesize 2] [web::config cmdparam c] [web::config timeparam g] [web::config cmdurltimestamp] [web::config logsubst] [web::config safelog] [web::config putxmarkup] [web::config encryptchain] [web::config decryptchain]]
+    lappend res [list [web::config uploadfilesize] [web::config cmdparam] [web::config timeparam]]
+    web::config reset
+    lappend res [list [web::config uploadfilesize] [web::config cmdparam] [web::config timeparam] [web::config cmdurltimestamp] [web::config logsubst] [web::config safelog] [web::config putxmarkup] [web::config encryptchain] [web::config decryptchain]]
+
+} {{0 cmd t 1 0 1 brace web::encryptd web::decryptd} {1 page f 0 1 0 tag foo bar} {2 c g} {0 cmd t 1 0 1 brace web::encryptd web::decryptd}}
+
+test cfg-2.3 {crypt default} {
+    set res [web::config encryptchain [list a b]]
+    set res "$res\n[web::config encryptchain web::encryptd]"
+    set res "$res\n[web::config encryptchain]"
+    set res "$res\n[web::config decryptchain [list c d]]"
+    set res "$res\n[web::config decryptchain [list web::decryptd]]"
+    set res "$res\n[web::config decryptchain]"
+} {web::encryptd
+a b
+web::encryptd
+web::decryptd
+c d
+web::decryptd}
+
+test cfg-3.1 {putxmarkup} {
+    catch {web::config putxmarkup foo} msg
+    set res ""
+    lappend res $msg
+    lappend res [web::config putxmarkup tag]
+    lappend res [web::config putxmarkup tag]
+    lappend res [web::config putxmarkup brace]
+    lappend res [web::config putxmarkup]
+} {{bad type "foo": must be brace or tag} brace tag tag brace}
+
+test cfg-4.1 {default filepermissions} {
+    web::config reset
+    web::config filepermissions
+} {0644}
+
+test cfg-4.2 {change filepermissions} {
+    set res [web::config filepermissions 0600]
+    lappend res [web::config filepermissions 0604]
+    lappend res [web::config filepermissions]
+    lappend res [web::config filepermissions 0644]
+    lappend res [web::config filepermissions 0600]
+    lappend res [web::config filepermissions]
+    web::config reset
+    lappend res [web::config filepermissions]
+} {0644 0600 0604 0604 0644 0600 0644}
+
+foreach fc [info commands foo?] {
+    rename $fc {}
+}
+
+test cfg-4.3 {filecounter file permissions} {unixOnly} {
+    catch {
+	set umask [exec umask]
+	if {$umask != 0} {
+	    puts ""
+	    puts "WARNING: current umask prohibits some tests from running"
+	    puts "properly. Please run tests with a umask of 0, so the"
+	    puts "correct file permissions can be tested."
+	    puts ""
+	}
+    }
+    web::config reset
+    web::filecounter foo1 -filename foo.txt
+    foo1 nextval
+    set res [file attributes foo.txt -permissions]
+    file delete foo.txt
+    web::filecounter foo2 -filename foo.txt -perms 0600
+    foo2 nextval
+    lappend res [file attributes foo.txt -permissions]
+    file delete foo.txt
+    web::config filepermissions 0666
+    web::filecounter foo3 -filename foo.txt
+    foo3 nextval
+    lappend res [file attributes foo.txt -permissions]
+    file delete foo.txt
+    web::filecounter foo4 -filename foo.txt -perms 0604
+    foo4 nextval
+    lappend res [file attributes foo.txt -permissions]
+    file delete foo.txt
+    web::filecounter foo5 -filename foo.txt -perms 0666
+    foo5 nextval
+    lappend res [file attributes foo.txt -permissions]
+    file delete foo.txt
+    set res
+} {00644 00600 00666 00604 00666}
+
+test cfg-4.4 {formdata file upload file permissions} {unixOnly} {
+
+    web::config uploadfilesize 500
+    global data
+    set data "--xxxx\u0d
+Content-Disposition: form-data; name=\"file\"; filename=\"test.dat\"\u0d
+Content-Type: text/html\u0d
+\u0d
+A small text file\u0d
+--xxxx--\u0d
+"
+
+    set res {}
+    foreach perms {0600 0602 0660 0640 0666 0400} {
+	web::config filepermissions $perms
+	web::request -reset
+	web::dispatch -querystring "" -cmd "" -postdata \#data end "multipart/form-data; boundary=xxxx"
+	set currfile [lindex [web::formvar file] 0]
+	lappend res [file attributes $currfile -permissions]
+	lappend res [file size $currfile]
+	file delete -force $currfile
+    }
+    web::config reset
+    set res
+} {00600 17 00602 17 00660 17 00640 17 00666 17 00400 17}
+
+test cfg-4.5 {session context file permissions} {unixOnly} {
+
+    set res {}
+    foreach {ctx perm} {a 0644 b 0600 c 0640 d 0602 e 0666} {
+	web::config filepermissions $perm
+	web::filecontext $ctx -path "%d"
+	${ctx}::new 111
+	${ctx}::cset a 1
+	${ctx}::commit
+	lappend res [file attributes 111 -permissions]
+	file delete 111
+    }
+    web::config reset
+    set res
+
+} {00644 00600 00640 00602 00666}
+
+
+test cfg-4.6 {log file permissions} {unixOnly} {
+    set res {}
+    foreach perm {0644 0600 0602 0660 0640 0666 0400} {
+	web::config filepermissions $perm
+	web::logdest add *.-debug file foo.log
+	lappend res [file attributes foo.log -permissions]
+	web::logdest delete
+	file delete foo.log
+    }
+    web::config reset
+    set res
+} {00644 00600 00602 00660 00640 00666 00400}
+
+
+# cleanup
+::tcltest::cleanupTests

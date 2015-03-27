@@ -1,0 +1,181 @@
+#
+# filecounter.test -- 
+# nca-073-9
+# 
+# Copyright (c) 1996-2000 by Netcetera AG.
+# Copyright (c) 2001 by Apache Software Foundation.
+# All rights reserved.
+#
+# See the file "license.terms" for information on usage and
+# redistribution of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# @(#) $Id: filecounter.test 814622 2009-09-14 12:59:07Z ronnie $
+#
+
+# -----------------------------------------------------------------------------
+# tcltest package
+# -----------------------------------------------------------------------------
+if {[lsearch [namespace children] ::tcltest] == -1} {
+    package require tcltest
+    namespace import ::tcltest::*
+}
+
+# -----------------------------------------------------------------------------
+# creation and 'normal' usage
+# -----------------------------------------------------------------------------
+
+web::tempfile -remove
+set filename [web::tempfile]
+
+foreach fc [info commands handle*] {
+    rename $fc {}
+}
+test filecounter-1.0 {web::filecounter create a filecounter} {
+    web::filecounter handle1 -filename $filename -min 0 -max 3 -seed 2 -incr 1
+
+} {handle1}
+
+test filecounter-1.1 {web::filecounter get a value} {
+    handle1 nextval
+} {2}
+
+test filecounter-1.2 {web::filecounter with various number args} {
+    catch {web::filecounter handleX -filename afile -max 3 -seed 1 -incr 1} msg
+    set msg
+} {handleX}
+
+test filecounter-1.3 {web::filecounter with various number args and negative values} {
+    catch {web::filecounter handleXX -filename afile -max -3 -seed -10 -min -100 -incr 1 -wrap} msg
+    set msg
+} {handleXX}
+
+# -----------------------------------------------------------------------------
+# abuse
+# -----------------------------------------------------------------------------
+test filecounter-2.1 {web::filecounter use same handle again} {
+    catch {web::filecounter handle1 -filename afile -min 0 -max 3 -seed 2 -incr 1} msg
+    set msg
+} {web::filecounter: handle already exists}
+
+test filecounter-2.2 {web::filecounter use invalid values} {
+    catch {web::filecounter handle2 -filename afile -min 0 -max 3 -seed 5 -incr 1} msg
+    set msg
+} {web::filecounter: invalid or inconsistent arguments}
+
+test filecounter-2.3 {web::filecounter use invalid values} {
+    catch {web::filecounter handle2 -filename afile -min 3 -max 3 -seed 1 -incr 1} msg
+    set msg
+} {web::filecounter: invalid or inconsistent arguments}
+
+
+test filecounter-2.5 {web::filecounter handle at wrong position} {
+    catch {web::filecounter  -filename afile -min 3 -max 3 -seed 1 -incr 1 handle2} msg
+    set msg
+} {wrong # args: should be "web::filecounter handle -filename filename ?options?"}
+
+
+test filecounter-2.6 {web::filecounter overflow} {
+    handle1 nextval
+    catch {handle1 nextval} msg
+    set msg
+} {counter overflow}
+
+test filecounter-2.7 {web::filecounter with wrap} {
+    if {[file exists $filename]} {
+	file delete $filename
+    }
+    web::filecounter handle3 -filename $filename -max 3 -min 2 -seed 2 -incr 1 -wrap true
+    handle3 nextval
+    handle3 nextval
+    handle3 nextval
+    
+} {2}
+
+test filecounter-2.8 {get config of previous filecounter} {
+    set res [handle3 config]
+    string compare $res "file [list $filename] handle handle3 seed 2 min 2 max 3 incr 1 perms 0644 wrap true curr 2"
+} {0}
+
+test filecounter-2.9 {use invalid param/switch} {
+    set msg ""
+    catch {web::filecounter bla -filename af -false option} msg
+    set msg
+} {bad option "-false": must be -filename, -seed, -min, -max, -incr, -perms, or -wrap}
+
+foreach fc [info commands fc2_*] {
+    rename $fc {}
+}
+test filecounter-2.10 {backwards} {
+    web::filecounter fc2_10 -filename [web::tempfile] -seed 10000 -incr -1000
+    set res [fc2_10 nextval]
+    append res "-[fc2_10 nextval]"
+    append res "-[fc2_10 nextval]"
+    append res "-[fc2_10 nextval]"
+    append res "-[fc2_10 nextval]"
+    append res "-[fc2_10 nextval]"
+    set res
+} {10000-9000-8000-7000-6000-5000}
+
+test filecounter-2.11 {forwards} {
+    web::filecounter fc2_11 -filename [web::tempfile] -seed 0 -incr 1000
+    set res [fc2_11 nextval]
+    append res "-[fc2_11 nextval]"
+    append res "-[fc2_11 nextval]"
+    append res "-[fc2_11 nextval]"
+    append res "-[fc2_11 nextval]"
+    append res "-[fc2_11 nextval]"
+    set res
+} {0-1000-2000-3000-4000-5000}
+
+foreach fc [info commands cur] {
+    rename $fc {}
+}
+test filecounter-3.0 {getval} {
+    web::filecounter cur -filename [web::tempfile] -seed 0 -incr 1 -max 1000
+    set res [cur nextval]
+    append res "-[cur getval]"
+    append res "-[cur nextval]"
+    append res "-[cur getval]"
+    append res "-[cur nextval]"
+    append res "-[cur getval]"
+    append res "-[cur nextval]"
+    set res
+} {0-0-1-1-2-2-3}
+
+test filecounter-3.1 {wrong option} {
+    catch {cur fooval} msg
+    set msg
+} {bad option "fooval": must be curval, nextval, getval, or config}
+
+set multifile [web::tempfile]
+
+foreach fc [info commands {c[12]}] {
+    rename $fc {}
+}
+test filecounter-3.2 {getval seed} {
+    web::filecounter c1 -filename $multifile -seed 0 -incr 1 -max 1000
+    set res [c1 getval]
+    append res "-[c1 nextval]"
+    append res "-[c1 getval]"
+    append res "-[c1 nextval]"
+    append res "-[c1 getval]"
+    append res "-[c1 nextval]"
+    append res "-[c1 getval]"
+    set res
+} {0-1-1-2-2-3-3}
+
+test filecounter-3.2 {getval from two counters} {
+    web::filecounter c2 -filename $multifile -seed 0 -incr 1 -max 1000
+    catch {c2 curval} result
+    append result "-[c2 getval]"
+    append result "-[c2 curval]"
+    append result "-[c1 nextval]"
+    append result "-[c2 curval]"
+    append result "-[c2 nextval]"
+} {web::filecounter: no current value available-3-3-4-3-5}
+
+file delete $filename
+file delete $multifile
+
+# cleanup
+::tcltest::cleanupTests

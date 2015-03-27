@@ -1,0 +1,100 @@
+#
+# logtosyslog.test --
+# nca-073-9
+# 
+# Copyright (c) 1996-2000 by Netcetera AG.
+# Copyright (c) 2001 by Apache Software Foundation.
+# All rights reserved.
+#
+# See the file "license.terms" for information on usage and
+# redistribution of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# @(#) $Id: logtosyslog.test 784041 2009-06-12 09:08:46Z ronnie $
+#
+
+# -----------------------------------------------------------------------------
+# tcltest package
+# -----------------------------------------------------------------------------
+
+if {[lsearch [namespace children] ::tcltest] == -1} {
+    package require tcltest
+    namespace import ::tcltest::*
+}
+
+# -----------------------------------------------------------------------------
+# scanFileForPattern -- return "Ok" if pattern found in one of the lines of
+#   file, "Failed" else.
+# -----------------------------------------------------------------------------
+proc scanFileForPattern {fileName pattern} {
+
+    if {[file exists $fileName]} {
+	if {[catch {
+	    exec grep $pattern $fileName
+	} msg]} {
+	    return 0
+	} else {
+	    return 1
+	}
+    }
+    return 0
+}
+
+# -----------------------------------------------------------------------------
+# try to log to syslog
+# -----------------------------------------------------------------------------
+
+test logToSyslog-1.1 {websh3_toSyslog: logdest add returns id} {unixOnly} {
+    web::logdest delete
+    set res [web::logdest add info2.-debug syslog 0]
+} {logdest0}
+
+
+global srclist
+set srclist [list /var/adm/messages /var/log/messages /var/log/syslog /var/log/system.log]
+
+proc sysLogIsReadable {} {
+    global srclist
+    foreach file $srclist {
+	if {[file readable $file]} {
+	    return 1
+	}
+    }
+    return 0
+}
+
+testConstraint sysLogUnreadableOrNotFound [sysLogIsReadable]
+
+test logToSyslog-1.2 {websh3_toSyslog: test log} {unixOnly sysLogUnreadableOrNotFound} {
+    set res "Failed"
+
+    set curTim [clock seconds]
+
+    web::logdest delete
+    web::loglevel delete
+
+    set format "Websh T E S T toSyslog \[$curTim\]\n"
+    web::loglevel add info.-debug
+    web::logdest add -format $format info.-debug syslog 10
+
+    web::log info.info {toSyslog}
+
+    ## give syslog a little time to feed the message to the file
+    after 1000
+
+    global srclist
+    foreach tmp $srclist {
+        if {[scanFileForPattern $tmp $format]} {
+	    set res "Ok"
+            break
+        }
+    }
+
+    ## clean up
+    web::logdest delete
+    web::loglevel delete
+
+    set res
+} {Ok}
+
+# cleanup
+::tcltest::cleanupTests

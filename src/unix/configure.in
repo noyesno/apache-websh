@@ -1,0 +1,425 @@
+#
+# configure.in -- configure def for websh
+# nca-073-9
+#
+# (adapted from sampleextension-0.2)
+#
+# See the file "license.terms" for information on usage and
+# redistribution of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# @(#) $Id: configure.in 814719 2009-09-14 16:07:00Z ronnie $
+#
+
+#--------------------------------------------------------------------
+# This very first macro is used to verify that the configure script can 
+# find the sources.  The argument to AC_INIT should be a unique filename
+# for this package, and can be a relative path, such as:
+#
+# AC_INIT(../generic/tcl.h)
+#--------------------------------------------------------------------
+
+AC_INIT(../generic/web.c)
+
+#--------------------------------------------------------------------
+# Set your package name and version numbers here.  The NODOT_VERSION is
+# required for constructing the library name on systems that don't like
+# dots in library names (Windows).  The VERSION variable is used on the
+# other systems.
+#--------------------------------------------------------------------
+
+PACKAGE=web
+
+MAJOR_VERSION=3
+MINOR_VERSION=6
+PATCHLEVEL=0b5
+
+VERSION=${MAJOR_VERSION}.${MINOR_VERSION}.${PATCHLEVEL}
+NODOT_VERSION=${MAJOR_VERSION}${MINOR_VERSION}${PATCHLEVEL}
+
+AC_SUBST(PACKAGE)
+AC_SUBST(VERSION)
+
+#--------------------------------------------------------------------
+# Check whether --enable-gcc or --disable-gcc was given.  Do this 
+# before AC_CYGWIN is called so the compiler can 
+# be fully tested by built-in autoconf tools.
+# This macro also calls AC_PROG_CC to set the compiler if --enable-gcc
+# was not used.
+#--------------------------------------------------------------------
+
+SC_ENABLE_GCC
+AC_PROG_INSTALL
+
+AC_EGREP_HEADER(strcasecmp, string.h, tcl_ok=1, tcl_ok=0)
+if test $tcl_ok = 0; then
+	AC_EGREP_HEADER(strcasecmp, strings.h, tcl_ok=1, tcl_ok=0)
+	if test $tcl_ok = 0; then
+		AC_ERROR(needed function strcasecmp not found on this system)
+	fi
+fi
+
+#--------------------------------------------------------------------
+# Checks to see if the make program sets the $MAKE variable.
+#--------------------------------------------------------------------
+
+AC_PROG_MAKE_SET
+
+#--------------------------------------------------------------------
+# Find ranlib
+#--------------------------------------------------------------------
+
+AC_PROG_RANLIB
+
+#--------------------------------------------------------------------
+# This macro performs additional compiler tests.
+#--------------------------------------------------------------------
+
+AC_CYGWIN
+
+#--------------------------------------------------------------------
+# Determines the correct binary file extension (.o, .obj, .exe etc.)
+#--------------------------------------------------------------------
+
+AC_OBJEXT
+AC_EXEEXT
+
+#--------------------------------------------------------------------
+# "cygpath" is used on windows to generate native path names for include
+# files.
+# These variables should only be used with the compiler and linker since
+# they generate native path names.
+#
+# Unix tclConfig.sh points SRC_DIR at the top-level directory of
+# the Tcl sources, while the Windows tclConfig.sh points SRC_DIR at
+# the win subdirectory.  Hence the different usages of SRC_DIR below.
+#
+# This must be done before calling SC_PUBLIC_TCL_HEADERS
+#--------------------------------------------------------------------
+
+case "`uname -s`" in
+    *win32* | *WIN32* | *CYGWIN_NT*)
+	CYGPATH="cygpath -w"
+    ;;
+    *)
+	CYGPATH=echo
+    ;;
+esac
+
+AC_SUBST(CYGPATH)
+
+#--------------------------------------------------------------------
+# Choose which headers you need.  Extension authors should try very
+# hard to only rely on the Tcl public header files.  Internal headers
+# contain private data structures and are subject to change without
+# notice.
+# This MUST be called before SC_PATH_TCLCONFIG/SC_LOAD_TCLCONFIG
+#--------------------------------------------------------------------
+
+SC_PUBLIC_TCL_HEADERS
+
+#--------------------------------------------------------------------
+# Load the tclConfig.sh file
+#--------------------------------------------------------------------
+
+SC_PATH_TCLCONFIG
+SC_LOAD_TCLCONFIG
+
+
+#--------------------------------------------------------------------
+# --with-httpd-include and --with-httpd (for Darwin)
+#--------------------------------------------------------------------
+AC_MSG_CHECKING(for httpd header files)
+AC_ARG_WITH(httpdinclude, [  --with-httpdinclude     directory containing the apache header files.], with_httpdinclude=${withval}, with_httpdinclude=NA)
+
+if test x"${with_httpdinclude}" != xNA ; then
+  if test -f "${with_httpdinclude}/httpd.h" ; then
+      echo "found ${with_httpdinclude}"
+      HTTPD_INCLUDES=-I\"${with_httpdinclude}\"
+      HTTPD_INCDIR=${with_httpdinclude}
+      AC_SUBST(HTTPD_INCLUDES)
+  else
+      AC_MSG_ERROR([${with_httpdinclude}: directory does not contain Apache httpd header file httpd.h])
+  fi
+else
+  eval "temp_includedir=${includedir}"
+  for i in \
+    `ls -d ${temp_includedir} 2>/dev/null` \
+    /usr/local/include /usr/include /usr/include/httpd /usr/include/apache2\
+    /usr/include/apache /usr/include/httpd2 ; do
+    if test -f "$i/httpd.h" ; then
+      echo "found $i"
+      HTTPD_INCLUDES=-I\"$i\"
+      HTTPD_INCDIR=$i
+      AC_SUBST(HTTPD_INCLUDES)
+      break
+    fi
+  done
+  if test x"${HTTPD_INCLUDES}" = x ; then
+    AC_MSG_ERROR(httpd.h not found.  Please specify its location with --with-httpdinclude)
+  fi
+fi
+
+if test "`uname -s`" = "Darwin" ; then
+  AC_MSG_CHECKING(for httpd binary)
+  AC_ARG_WITH(httpd, [  --with-httpd            apache binary (Darwin only)], with_httpd=${withval}, with_httpd=NA)
+  if test x"${with_httpd}" != xNA ; then
+    if test -f "${with_httpd}" ; then
+      echo "found ${with_httpd}"
+      HTTPD_BIN=${with_httpd}
+    else
+      AC_MSG_ERROR(httpd binary not found.  Invalid specification --with-httpd)
+    fi
+  else
+    if test -f "${HTTPD_INCDIR}/../bin/httpd" ; then
+      echo "found ${HTTPD_INCDIR}/../bin/httpd"
+      HTTPD_BIN=${HTTPD_INCDIR}/../bin/httpd
+    else
+      httpd=`which httpd`
+      if test -f "${httpd}" ; then
+        echo "found ${httpd}"
+        HTTPD_BIN=${httpd}
+      else
+        AC_MSG_ERROR(httpd binary not found.  Please specify its location with --with-httpd)
+      fi
+    fi
+  fi
+else
+  HTTPD_BIN=
+fi
+AC_SUBST(HTTPD_BIN)
+
+#--------------------------------------------------------------------
+# --with-apr and --with-apr-util
+#--------------------------------------------------------------------
+# needed for Apache httpd 2.2.4 (and others) if Apache httpd is configured
+# with --with-apr and/or --with-apr-util -> header files are missing in 
+# installation of httpd
+
+AC_ARG_WITH(aprinclude, [  --with-aprinclude       directory containing apr header files.], with_aprinclude=${withval}, with_aprinclude=NA)
+
+if test x"${with_aprinclude}" != xNA ; then
+  AC_MSG_CHECKING(for apache runtime (apr) header files)
+  if test -f "${with_aprinclude}/apr.h" ; then
+      echo "found ${with_aprinclude}"
+      APR_INCLUDES=" -I\"${with_aprinclude}\""
+      AC_SUBST(APR_INCLUDES)
+  else
+      AC_MSG_ERROR([${with_aprinclude}: directory does not contain apr header file apr.h])
+  fi
+else
+  APR_INCLUDES=
+  AC_SUBST(APR_INCLUDES)
+fi
+
+AC_ARG_WITH(apuinclude, [  --with-apuinclude       directory containing apr util header files.], with_apuinclude=${withval}, with_apuinclude=NA)
+
+if test x"${with_apuinclude}" != xNA ; then
+  AC_MSG_CHECKING(for apache runtime utils (apu) header files)
+  if test -f "${with_apuinclude}/apr_hooks.h" ; then
+      echo "found ${with_apuinclude}"
+      APU_INCLUDES=" -I\"${with_apuinclude}\""
+      AC_SUBST(APU_INCLUDES)
+  else
+      AC_MSG_ERROR([${with_apuinclude}: directory does not contain apu header file apr_hooks.h])
+  fi
+else
+  APU_INCLUDES=
+  AC_SUBST(APU_INCLUDES)
+fi
+
+#--------------------------------------------------------------------
+# A few miscellaneous platform-specific items:
+#
+# Define a special symbol for Windows (BUILD_exampleA in this case) so
+# that we create the export library with the dll.  See sha1.h on how
+# to use this.
+#
+# Windows creates a few extra files that need to be cleaned up.
+# You can add more files to clean if your extension creates any extra
+# files.
+#
+# Define any extra compiler flags in the PACKAGE_CFLAGS variable.
+# These will be appended to the current set of compiler flags for
+# your system.
+#--------------------------------------------------------------------
+
+case "`uname -s`" in
+    *win32* | *WIN32* | *CYGWIN_NT*)
+	CLEANFILES="*.lib *.dll *.exp *.ilk *.pdb vc50.pch"
+    ;;
+    *)
+	CLEANFILES="*pure* *.cov* ../tests/webtest.log ../tests/*.dat"
+    ;;
+esac
+AC_SUBST(CLEANFILES)
+
+
+#--------------------------------------------------------------------
+# set SYSV or WIN32 or AIX
+#--------------------------------------------------------------------
+case "`uname -s`" in
+    *win32* | *WIN32* | *CYGWIN_NT*)
+	PLATFORM="WIN32"
+    ;;
+    *aix* | *AIX* )
+	PLATFORM="AIX"
+    ;;
+    *freebsd* | *FreeBSD* )
+	PLATFORM="FREEBSD"
+    ;;
+    *bsd/os* | *BSD/OS* )
+	PLATFORM="BSDI"
+    ;;
+    *)
+	PLATFORM="SYSV"
+    ;;
+esac
+AC_SUBST(PLATFORM)
+
+#--------------------------------------------------------------------
+# Check whether --enable-threads or --disable-threads was given.
+# So far only Tcl responds to this one.
+#--------------------------------------------------------------------
+
+SC_ENABLE_THREADS
+
+#--------------------------------------------------------------------
+# The statement below defines a collection of symbols related to
+# building as a shared library instead of a static library.
+#--------------------------------------------------------------------
+
+SC_ENABLE_SHARED
+
+#--------------------------------------------------------------------
+# This macro figures out what flags to use with the compiler/linker
+# when building shared/static debug/optimized objects.  This information
+# is all taken from the tclConfig.sh file.
+#--------------------------------------------------------------------
+
+CFLAGS_DEBUG=${TCL_CFLAGS_DEBUG}
+CFLAGS_OPTIMIZE=${TCL_CFLAGS_OPTIMIZE}
+LDFLAGS_DEBUG=${TCL_LDFLAGS_DEBUG}
+LDFLAGS_OPTIMIZE=${TCL_LDFLAGS_OPTIMIZE}
+SHLIB_LD=${TCL_SHLIB_LD}
+STLIB_LD=${TCL_STLIB_LD}
+SHLIB_CFLAGS=${TCL_SHLIB_CFLAGS}
+
+AC_SUBST(CFLAGS_DEBUG)
+AC_SUBST(CFLAGS_OPTIMIZE)
+AC_SUBST(STLIB_LD)
+AC_SUBST(SHLIB_LD)
+AC_SUBST(SHLIB_CFLAGS)
+AC_SUBST(SHLIB_LDFLAGS)
+
+#--------------------------------------------------------------------
+# Set the default compiler switches based on the --enable-symbols 
+# option.
+#--------------------------------------------------------------------
+
+SC_ENABLE_SYMBOLS
+
+if test "${SHARED_BUILD}" = "1" ; then
+    CFLAGS='${CFLAGS_DEFAULT} ${CFLAGS_DEBUG} ${CFLAGS_WARNING} ${SHLIB_CFLAGS}'
+else
+    CFLAGS='${CFLAGS_DEFAULT} ${CFLAGS_DEBUG} ${CFLAGS_WARNING}'
+fi
+
+#--------------------------------------------------------------------
+# Everyone should be linking against the Tcl stub library.  If you
+# can't for some reason, remove this definition.  If you aren't using
+# stubs, you also need to modify the SHLIB_LD_LIBS setting below to
+# link against the non-stubbed Tcl library.
+#--------------------------------------------------------------------
+
+USE_TCL_STUBS=1
+AC_SUBST(USE_TCL_STUBS)
+
+#--------------------------------------------------------------------
+# This macro generates a line to use when building a library.  It
+# depends on values set by the SC_ENABLE_SHARED, SC_ENABLE_SYMBOLS,
+# and SC_LOAD_TCLCONFIG macros above.
+#--------------------------------------------------------------------
+
+SC_MAKE_LIB
+
+#--------------------------------------------------------------------
+# eval these two values to dereference the ${DBGX} variable.
+#--------------------------------------------------------------------
+
+eval "SHARED_LIB_SUFFIX=${TCL_SHARED_LIB_SUFFIX}"
+eval "UNSHARED_LIB_SUFFIX=${TCL_UNSHARED_LIB_SUFFIX}"
+
+AC_SUBST(SHARED_LIB_SUFFIX)
+AC_SUBST(UNSHARED_LIB_SUFFIX)
+
+#--------------------------------------------------------------------
+# Shared libraries and static libraries have different names.
+#--------------------------------------------------------------------
+
+case "`uname -s`" in
+    *win32* | *WIN32* | *CYGWIN_NT*)
+	if test "${SHARED_BUILD}" = "1" ; then
+	    SHLIB_LD_LIBS="\"`cygpath -w ${TCL_BIN_DIR}/${TCL_STUB_LIB_FILE}`\" ${TCL_SHLIB_LD_LIBS}"
+	    eval "${PACKAGE}_LIB_FILE=${PACKAGE}sh${SHARED_LIB_SUFFIX}"
+	    RANLIB=:
+	else
+	    eval "${PACKAGE}_LIB_FILE=${PACKAGE}sh${UNSHARED_LIB_SUFFIX}"
+	fi
+	;;
+    *)
+	if test "${SHARED_BUILD}" = "1" ; then
+	    SHLIB_LD_LIBS="${TCL_STUB_LIB_SPEC}"
+	    eval "${PACKAGE}_LIB_FILE=lib${PACKAGE}sh${SHARED_LIB_SUFFIX}"
+	    RANLIB=:
+	else
+	    eval "${PACKAGE}_LIB_FILE=lib${PACKAGE}sh${UNSHARED_LIB_SUFFIX}"
+	fi
+	;;
+esac
+
+#--------------------------------------------------------------------
+# Change the name from exampeA_LIB_FILE to match your package name.
+#--------------------------------------------------------------------
+
+AC_SUBST(web_LIB_FILE)
+AC_SUBST(SHLIB_LD_LIBS)
+
+#--------------------------------------------------------------------
+# Find tclsh so that we can run pkg_mkIndex to generate the pkgIndex.tcl
+# file during the install process.  Don't run the TCLSH_PROG through
+# ${CYGPATH} because it's being used directly by make.
+# Require that we use a tclsh shell version 8.2 or later since earlier
+# versions have bugs in the pkg_mkIndex routine.
+#--------------------------------------------------------------------
+
+#AC_PATH_PROGS (VARIABLE, PROGS-TO-CHECK-FOR [,
+#          VALUE-IF-NOT-FOUND [, PATH]])
+#     Like `AC_CHECK_PROGS', but if any of PROGS-TO-CHECK-FOR are found,
+#     set VARIABLE to the entire path of the program found.
+
+# search in configured path first
+AC_PATH_PROGS(TCLSH_PROG, \
+  tclsh8.6${EXEEXT} tclsh86${EXEEXT} tclsh8.5${EXEEXT} tclsh85${EXEEXT} tclsh8.4${EXEEXT} tclsh84${EXEEXT} tclsh8.3${EXEEXT} tclsh83${EXEEXT} tclsh8.2${EXEEXT} tclsh82${EXEEXT}, :, \
+  :${TCL_BIN_DIR}/../bin)
+
+if test "x${TCLSH_PROG}" = "x:" ; then
+   # search in additional paths
+   AC_PATH_PROGS(TCLSH_PROG, \
+     tclsh8.6${EXEEXT} tclsh86${EXEEXT} tclsh8.5${EXEEXT} tclsh85${EXEEXT} tclsh8.4${EXEEXT} tclsh84${EXEEXT} tclsh8.3${EXEEXT} tclsh83${EXEEXT} tclsh8.2${EXEEXT} tclsh82${EXEEXT}, :, \
+       :.:${prefix}:${exec_prefix}:${PATH})
+fi
+
+# if nothing was found
+if test "x${TCLSH_PROG}" = "x:" ; then
+    AC_ERROR(needed tclsh not found)
+fi
+
+AC_SUBST(TCL_LIB_SPEC)
+AC_SUBST(TCLSH_PROG)
+AC_SUBST(TCL_PACKAGE_PATH)
+
+#--------------------------------------------------------------------
+# Finally, substitute all of the various values into the Makefile.
+#--------------------------------------------------------------------
+
+AC_OUTPUT([Makefile])

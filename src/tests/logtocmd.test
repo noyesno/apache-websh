@@ -1,0 +1,74 @@
+#
+# logtocmd.test --
+# nca-073-9
+# 
+# Copyright (c) 1996-2000 by Netcetera AG.
+# Copyright (c) 2001 by Apache Software Foundation.
+# All rights reserved.
+#
+# See the file "license.terms" for information on usage and
+# redistribution of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# @(#) $Id: logtocmd.test 788707 2009-06-26 14:04:40Z ronnie $
+#
+
+# -----------------------------------------------------------------------------
+# tcltest package
+# -----------------------------------------------------------------------------
+
+if {[lsearch [namespace children] ::tcltest] == -1} {
+    package require tcltest
+    namespace import ::tcltest::*
+}
+
+# -----------------------------------------------------------------------------
+# a log handler
+# -----------------------------------------------------------------------------
+proc testLogHandler {msg} {
+    return "testLogHandler -- T E S T -- ok"
+}
+
+# -----------------------------------------------------------------------------
+# try to log to a command
+# -----------------------------------------------------------------------------
+test logToCmd-1.1 {websh3_logToCmd: logdest add returns id} {
+    web::logdest delete
+    set res [web::logdest add info2.-debug command dummy]
+} {logdest0}
+
+test logToCmd-1.2 {websh3_logToCmd: test log to command} {
+    web::logdest delete
+    web::loglevel delete
+    web::logdest add info2.-debug command testLogHandler
+    web::loglevel add info2.-debug
+    set curTim [clock seconds]
+    set res [web::log info2.info $curTim]
+} {testLogHandler -- T E S T -- ok}
+
+proc testLogHandler {msg} {
+    return Bar
+}
+
+test logToCmd-2.1 {logToCmd: test log to command error} {
+    web::logdest delete
+    web::loglevel delete
+    web::logdest add info2.-debug command testLogHandler
+    web::loglevel add info2.-debug
+    set res [web::log info2.info Foo]
+    proc testLogHandler {msg other} {
+	return "$msg $other"
+    }
+    set msg ""
+    web::config safelog 0
+    set c [catch {web::log info2.info Zoo} msg]
+    web::config safelog 1
+    proc testLogHandler {msg} {
+	return "$msg $other"
+    }
+    set c2 [catch {web::log info2.info Quo} omsg]
+    set r2 [web::log info2.info Mup]
+    set msg "$c - $c2 - $res - $msg - $r2"
+} {1 - 0 - Bar - wrong # args: should be "testLogHandler msg other" - can't read "other": no such variable}
+
+# cleanup
+::tcltest::cleanupTests

@@ -1,0 +1,18 @@
+# $Id: pool.ws3 745278 2009-02-17 22:32:52Z ronnie $
+# interp pool testing code.
+
+web::initializer {
+
+    web::command default {
+	if { [info exists counter] } {
+	    incr counter
+	} else {
+	    set counter 1
+	}
+	
+	web::put "Counter is $counter"
+    }
+
+}
+
+web::dispatch

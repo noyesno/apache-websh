@@ -1,0 +1,23 @@
+/*
+ * webutlcmd.h --
+ * nca-073-9
+ * 
+ * Copyright (c) 1996-2000 by Netcetera AG.
+ * Copyright (c) 2001 by Apache Software Foundation.
+ * All rights reserved.
+ *
+ * See the file "license.terms" for information on usage and
+ * redistribution of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+ *
+ * @(#) $Id: webutlcmd.h 322102 2001-10-25 17:50:15Z davidw $
+ *
+ */
+
+#include "tcl.h"
+
+#ifndef WEBUTLCMD_H
+#define WEBUTLCMD_H
+
+int webutlcmd_Init(Tcl_Interp * interp);
+
+#endif

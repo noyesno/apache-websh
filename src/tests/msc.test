@@ -1,0 +1,204 @@
+#
+# msc.test -- misc stuff that did not fit anywhere elese
+# nca-073-9
+# 
+# Copyright (c) 1996-2000 by Netcetera AG.
+# Copyright (c) 2001 by Apache Software Foundation.
+# All rights reserved.
+#
+# See the file "license.terms" for information on usage and
+# redistribution of this file, and for a DISCLAIMER OF ALL WARRANTIES.
+#
+# @(#) $Id: msc.test 814622 2009-09-14 12:59:07Z ronnie $
+#
+
+# -----------------------------------------------------------------------------
+# tcltest package
+# -----------------------------------------------------------------------------
+if {[lsearch [namespace children] ::tcltest] == -1} {
+    package require tcltest
+    namespace import ::tcltest::*
+}
+
+web::tempfile -remove
+
+# -----------------------------------------------------------------------------
+# creation and 'normal' usage
+# -----------------------------------------------------------------------------
+test copyright-1.0 {web::config copyright} {
+    set res {}
+    set tmp [web::config copyright]
+    lappend res [regexp {http://netcetera\.ch} $tmp]
+    lappend res [regexp {http://tcl\.apache\.org/websh} $tmp]
+    set res
+} {1 1}
+
+test tempfile-1.0a {web::tempfile dir prefix} {unixOnly} {
+    set home "/tmp"
+    if {[info exists env(HOME)]} {
+	set home $env(HOME)
+    } elseif {[info exists env(TMP)]} { 
+	set home $env(TMP)
+    }
+    set tmp [web::tempfile -path $home -prefix "prefix"]
+    set msg ""
+    if {[string match "[file join $home prefi]*" $tmp]} {
+	set fh [open $tmp w]
+	if {[file exists $tmp]} {
+	    set msg ok
+	    ## Websh will try to remove file at end
+	} else {
+	    set msg "filename $tmp not on file system"
+	}
+	close $fh
+    } else {
+	set msg "filename $tmp does not satisfy specs"
+    }
+    set msg
+} {ok}
+
+test tempfile-1.0b {web::tempfile dir prefix} {pcOnly} {
+    set tmp [web::tempfile -prefix "prefix"]
+    set msg ""
+    if {[string match "*prefi*" $tmp]} {
+	set fh [open $tmp w]
+	if {[file exists $tmp]} {
+	    set msg ok
+	    ## Websh will try to remove file at end
+	} else {
+	    set msg "filename $tmp not on file system"
+	}
+	close $fh
+    } else {
+	set msg "filename $tmp does not satisfy specs"
+    }
+    set msg
+} {ok}
+
+test tempfile-1.2 {web::tempfile reject invalid dir} {
+    set tmp [web::tempfile -path "/tmp/yoyoy" -prefix "prefix"]
+    set msg ""
+    if {[string match "/tmp/yoyoy*" $tmp]} {
+	global tcl_platform
+	if {"$tcl_platform(platform)" == "unix"
+	    && "$tcl_platform(os)" == "Darwin"} {
+	    # OSX does not complain if directory does not exist
+	    # It just returns the nonexistig path anyway
+	    set msg "ok"
+	} else {
+	    set msg "error: accepted non-existing dir $tmp"
+	}
+    } elseif {[string match "*prefi*" $tmp]} {
+	set msg "ok"
+    } else {
+	set msg "error: rejected valid prefix"
+    }
+    set msg
+} {ok}
+
+test tempfile-1.3 {temporary file name} {
+    set fn [web::tempfile]
+    file exists $fn
+} {0}
+
+proc createFile filename {
+    set fh [open $filename w]
+    puts $fh x
+    close $fh
+}
+
+test tempfile-1.4 {remove temporary files} {} {
+    foreach f {f1 f2 f3 f4 f5 f6} {
+	set $f [web::tempfile]
+	createFile [set $f]
+    }
+    web::tempfile -remove
+    set exist 0
+    foreach f {f1 f2 f3 f4 f5 f6} {
+	incr exist [file exists [set $f]]
+    }
+    set exist
+} {0}
+
+test request-1.1 {access env var} {
+
+    set res [web::request -set websh_test_11 "the Websh guy"]
+    lappend res [web::request -set websh_test_11]
+    lappend res [web::request -set FOO_ENV_VAR]
+    set res
+} {the Websh guy {the Websh guy} {}}
+
+test request-1.2 {without subcommand} {
+
+    web::request -set websh_test_12 "the Websh guy"
+    set res [web::request websh_test_12]
+    lappend res [web::request FOO_ENV_VAR "bar_env"]
+    set res
+} {the Websh guy bar_env}
+
+test request-1.3 {-exists} {
+
+    set res [web::request -count websh_test_13]
+    web::request -set websh_test_13 "the Websh guy" "and the test guy"
+    lappend res [web::request -count websh_test_13]
+    web::request -unset websh_test_13
+    lappend res [web::request -count websh_test_13]
+    set res
+} {0 2 0}
+
+test request-1.4 {-names} {
+
+    web::request -set websh_test_14 "the Websh guy"
+    set tmp [web::request -names]
+    set res [expr [llength $tmp] > 1]
+    lappend res [expr [lsearch $tmp "websh_test_14"] != -1]
+    set res
+} {1 1}
+
+#fixme: these need some work...
+
+test modwebsh-1.1 {initialzer} {
+
+    web::initializer {set tst "modwebsh1_1"}
+} {modwebsh1_1}
+
+test modwebsh-1.2 {finalizer} {
+
+    web::finalizer {set tst "modwebsh1_2"}
+} {modwebsh1_2}
+
+test modwebsh-1.3 {maineval} {
+
+    web::maineval {foo}
+} {}
+
+test modwebsh-1.4 {interpclass} {
+
+    web::interpcfg {foo}
+
+} {}
+
+test modwebsh-1.5 {interpclasscfg} {
+
+    web::interpclasscfg {foo}
+
+} {}
+
+test modwebsh-1.6 {web::config mod_websh vars} {
+    global env
+    set env(SERVER_ROOT) SeRo
+    set env(DOCUMENT_ROOT) DoRo
+    set env(SCRIPT_FILENAME) ScFn
+    set res {}
+    lappend res [web::config script]
+    lappend res [web::config server_root]
+    lappend res [web::config document_root]
+    lappend res [web::config interpclass]
+    unset env(SERVER_ROOT)
+    unset env(DOCUMENT_ROOT)
+    unset env(SCRIPT_FILENAME)
+    set res
+} {ScFn SeRo DoRo ScFn}
+
+# cleanup
+::tcltest::cleanupTests

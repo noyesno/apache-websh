@@ -1,0 +1,1548 @@
+2006-09-14 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* <various sources>:
+	Changed version to 3.6.0b5
+
+2006-09-14 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/tests/*.test:
+	- Further improvments when running tests repeatedly
+	  (to track down memory cunsumption issues)
+	* doc/quickref.xml:
+	- Improved documentation of web::tempfile
+	- Fixed typo in web::match
+	* src/generic/checksum.c:
+	- Better location for Tcl_IncrRefCount (in crcAsciify)
+	* src/generic/conv.c, src/generic/crypt.c:
+	- Proper refcount handling of (temp) objects.
+	- Properly decrement refcount of result from webHtmlify
+	* src/generic/dispatch.c:
+	- Prevent memory leak of cmd when hook fails in web::cmdurl
+	- Proper refcount handling of (temp) objects.
+	* src/generic/filecounter.c, src/generic/filecounter.h:
+	- Prevent memory leak when filecounter is deleted (cleanup)
+	* src/generic/htmlify.c:
+	- Proper handling of (temp) objects
+	- Return incremented refcount for webHtmlify
+	* src/generic/log.c:
+	- Closed memory leak when returning names of loglevels and legdests
+	- Proper refcount Handling of logging in DEBUG mode
+	* src/generic/logutl.c:
+	- Properly increment refcount of return value in formatMessage
+	* src/generic/modwebsh_ap.c:
+	- Properly increment refcount on webInterp->dtor in Web_Finalizer_AP
+	* src/generic/nca_d.c:
+	- Always return Tcl_Obj with incremented refcount in encryptNcaD
+	* src/generic/paramlist.c:
+	- Proper refcount handling of (temp) objects.
+	* src/generic/request.c:
+	- Proper increment of refcount in requestData struct
+	* src/generic/url.c:
+	- Closed memory leak in web::cmdurl when using scheme in urlformat
+	- Proper refcount handling of urlData fields
+	* src/generic/varchannel.c:
+	- Closed memory leak in varchannelInputProc and varchannelOutputProc
+	  (previously leaked object returned by Web_GetOrCreateGlobalVar)
+	* src/generic/webout.c:
+	- Closed memory leak when resetting default response obj
+	  (previously leaked defaultResponseObj, because it was not added to
+	  the response object hashin the hash)
+
+2006-09-11 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/tests/*.test:
+	- Make tests run repeatedly in same interp (i.e. close all
+	  file handles properly, cleanup some leftovers etc.)
+
+2009-07-28 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/dispatch.c:
+	- Added Tcl_DecrRefCount on cmdName on error to prevent
+	  memory leak when hook in dispatch fails.
+	- Fixed memory leak in dispatch
+	* src/generic/crypt.c:
+	- Properly increment ref count of initial vlaue of encryptChain
+	  and decryptChain in cryptData
+	- Earlier increment ref count of cmd to be eval'd (just to be sure)
+	* src/generic/logutl.c:
+	- Increment ref count of fsmg in formatMessage already
+	* src/generic/htmlify.c:
+	- Increment ref count of result in webHtmlify
+	- Fix memory leak in HANDLE_UNICODE_ENTITY macro (webDeHtmlify)
+	* src/generic/checksum.c:
+	- Earlier increment ref count of return object in crcAsciify
+	* src/generic/conv.c:
+	- Decrement ref count on result of webHtmlify
+	- Incr and decr of ref count of tmp objects in Web_DeHtmlify and
+	  Web_Html_RemoveComments
+	- Increment ref count of Tcl objs in convData struct
+	* src/generic/request.c:
+	- Proper ref count of initial objs in requestData
+	- proper handling of upLoadFileSize and cmdUrlTimestamp in
+	  resetRequestData (in unused code, but for consistency)
+	* src/generic/modwebsh_ap.c:
+	- Proper ref count of webInterp->dtor in Web_Finalizer_AP
+	* src/generic/nca_d.c:
+	- Proper ref count of new empty string when encrypting empty string
+	* src/generic/url.c:
+	- Proper initial ref count of urlData->defaultscheme
+	- Fixed memory leak in cmdurl in certain special cases
+	* src/generic/log.c:
+	- Prevent memory leak when DEBUG is defined (properly discard temp
+	  obj created to log line number)
+	* src/generic/paramlist.c:
+	- Fixed memory leak in paramListAsListObj (static query param handling)
+	- Fixed memory leak in [web::param -names] when called with wrong args
+	
+2006-07-20 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/win/Makefile:
+	- Removed duplicate reference to Tcl stub lib
+
+2009-07-15 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/apachetests/runtests.tcl, src/apachetests/apachetest.tcl,
+	  src/apachetests/README, src/apachetests/conf/server.conf.tcl,
+	  src/apachetests/test/mod_websh.test;
+	- Port to run Apache tests on is now configurable in runtests.tcl
+	* modwebsh_cgi.c, modwebsh_cgi.h, modwebsh_ap.c, modwebsh.h,
+	  web.c, interpool.c:
+	- Init mod_websh call backs (Tcl_StubsInit) from libwebsh.so
+	  (ModWebsh_Init calls modwebsh_createcmd, which calls 
+	  ModWebsh_Init_AP if necessary)
+
+2009-07-14 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/tclAppInit.c, src/generic/interpool.c:
+	- Always call Tcl_InitStubs and consistently use "8.2" as version
+	* src/generic/interpool.c:
+	- Call new ModWebsh_Init to properly load libwebsh.so
+	* src/generic/web.c, src/generic/web.h:
+	- Added ModWebsh_Init to initialize libwebsh.so for mainInterp 
+	  in mod_websh
+	
+2009-06-26 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* doc/quickref.xml:
+	- Added documentation of [web::config] mod_websh subcommands
+	- Fixed minor typos
+	- Added documentation of [web::config safelog]
+	* doc/quickref.xsl:
+	- Reference to newer docbook version
+	* src/generic/cfg.c, src/generic/log.c, src/generic/log.h:
+	- Added [web::config safelog] with default 1 to explicitly allow
+	  web::log to throw an error if I/O fails (if safelog is set to 0)
+	* src/generic/logutl.c, src/generic/log.h:
+	- Properly report and pass errors during logging if 
+	  [web::config safelog] is set accordingly
+	  (sendMsgToDestList now returns TCL_OK/TCL_ERROR instead of void)
+	* src/generic/logtochannel.c, src/generic/logtochannel.h:
+	- Properly handle cases when channel is not available (anymore), i.e.
+	  Tcl_GetChannel for every log message and when destination is deleted
+	  instead of only getting channel initially and then produce a segfault
+	  if channel is gone.
+	* src/generic/logtofile.c:
+	- Properly track Tcl_Flush errors
+	* src/test/cfg.test:
+	- Fixed test cfg-1.1 to pass with newsafelog subcommand
+	- New test for [web::config safelog]
+	* src/tests/logtocmd.test:
+	- Added test for error in command and [web::config safelog]
+	* src/tests/logtochannel.test:
+	- Added test for closed channel and [web::config safelog]
+
+2009-06-17 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* doc/mod_websh/README, src/win/README:
+	- Properly document that shared lib libwebsh.so (websh.dll) is
+	  now needed to run the Apache module
+	* src/apachetests/README:
+	- hint on running apachetests on Windows
+	* src/unix/pkgIndex.tcl, src/win/pkgIndex.tcl:
+	- provide simple pkgIndex.tcl
+	* src/win/Makefile, src/unix/Makefile.in:
+	- also install pkgIndex.tcl
+
+2009-06-12 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/tests/logtosyslog.test:
+	- add constraint to only run test when syslog is 
+	  found and readable
+	* src/generic/mod_websh.c:
+	- removed redundant header includes and defines
+
+2009-05-22 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/url.c:
+	- properly detect host and port in request params
+	  (current servers/browsers deliver port in HTTP_HOST or SERVER_NAME)
+	  this solves a bug reported by Ashok P. Nadkarni in Dec 2008
+	* src/tests/cmdurl.test:
+	- added tests for host different port combinations (that used to
+	  trigger the bug above)
+	* doc/quickref.xml:
+	- fixed wrong option names of web::cmdurlcfg (-scheme and -host)
+	- clarified web::cmdurlcfg defaults.
+
+2009-05-22 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* <all changes>:
+	- allow dynamic linking of libwebsh.so|dll to websh, websh.exe and
+	  mod_websh.so
+	* doc_mod_websh/README, INSTALL, README, src/win/README:
+	- adapted to new dynamic linking
+	- reduced some redundancy
+	- documented (n)make apachetest target
+	* src/unix/Makefile.in, src/win/Makefile:
+	- dynamic linking of libwebsh.so|dll to websh, websh.exe and 
+	  mod_websh.so
+	* src/generic/modwebsh_cgi.h:
+	- created for ApFuncs: a struct with pointers to the
+	  mod_websh implementations of various websh commands that
+	  differ from the CGI implementation.
+	* src/generic/modwebsh_cgi.c:
+	- implemented a switch in all functions according to ApFuncs
+	  content -> call either mod_websh or CGI implementation.
+	* src/generic/request_cgi.c:
+	- implemented a switch in all functions according to ApFuncs
+	  content -> call either mod_websh or CGI implementation.
+	- changed signature in some funtcions to include interp to
+	  allow mod_websh / CGI switch depending on context (ApFuncs)
+	* src/generic/displatch.c:
+	- added interp as parameter to requestGetDefaultChannelName
+	  to allow mod_websh / CGI switch depending on context (ApFuncs)
+	* src/generic/response_ap.c:
+	- changed isDefaultResponseObj to isDefaultResponseObj_AP
+	  to distinguish functions since with dynamic linking, both
+	  versions CGI and mod_websh are present in the code.
+	- added interp as parameter to isDefaultResponseObj_AP
+	  to allow mod_websh / CGI switch depending on context (ApFuncs)
+	* src/generic/request_ap.c:
+	- changed requestGetDefaultChannelName to
+	  requestGetDefaultChannelName_AP and requestFillRequestValues to
+	  requestFillRequestValues_AP to distinguish functions since with
+	  dynamic linking, both versions CGI and mod_websh are present in
+	  the code.
+	- remove duplicate check for requestData->requestIsInitialized
+	* src/generic/interpool.c:
+	- setup apFuncs function pointers for mod_websh interps and set
+	  the struct as Tcl AssocData to the interp (Note: this is how at
+	  runtime, Websh distinguishes whether the CGI or the mod_websh
+	  implementation of certain functions must be invoked)
+	* src/generic/interpool.h:
+	- define prototypes for createApFuncs and destroyApFuncs
+	* src/generic/response_cgi.c:
+	- implemented a switch in all functions according to ApFuncs
+	  content -> call either mod_websh or CGI implementation.
+	- added interp as parameter to isDefaultResponseObj
+	  to allow mod_websh / CGI switch depending on context (ApFuncs)
+	* src/generic/modwebsh_ap.c:
+	- changed various functions from <func> to <func>_AP to allow
+	  mod_websh / CGI switch depending on context (ApFuncs)
+	- removed modwebsh_createcmd, since it's now redundant to the CGI
+	  implementation.
+	* src/generic/request.c:
+	- call requestGetDefaultChannelName with interp as parameter
+	* src/generic/request.h:
+	- changed prototypes for requestGetDefaultChannelName and
+	  requestGetDefaultOutChannelName: both now include interp as
+	  parameter
+	* src/generic/modwebsh.h:
+	- changed prototypes from <func> to <func>_AP for mod_websh
+	  implementation
+	* src/generic/webout.c:
+	- call isDefaultResponseObj and requestGetDefaultOutChannelName
+	  with interp as argument
+	* src/generic/webout.h:
+	- changed prototype of isDefaultResponseObj (added interp as
+	  argument)
+	* src/generic/web.c:
+	- added prototype of modwebsh_createcmd
+
+2009-05-22 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/apachetests/test/headers.test:
+	- proper URL in header-1.1 test
+
+2009-04-16 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/cookie.ws3:
+	- improved Cookie handling (deal with unusual formats)
+	* src/tests/cookiecontext.test:
+	- added test for the above fix
+
+2009-04-14 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/unix/Makefile.in:
+	- enhanced test rules to work with local dynamic library
+	- enhanced clean rule (new apachetest layout)
+	* src/win/Makefile:
+	- added apachetest target
+	- fixed dependencies for new AUTH_USER functionality
+	- enhanced clean rule (new apachetest target)
+	* src/apachetest/runtests.tcl:
+	- Windows compatibility
+	* src/apachetest/apachetest.tcl:
+	- Windows compatibility
+	- Apache 1.3 to 2.2 compatibility (for log config module renaming)
+	- new directory layout (logs subdir)
+	* src/apachetests/conf/server.conf.tcl:
+	- new directory layout (logs subdir)
+	* src/apachetests/test/hello.test, src/apachetests/docs/hello.ws3:
+	- added path_info test
+
+2009-04-14 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/request_ap.c:
+	- fix AUTH_USER includes for Apache2 and up
+	* src/tests/request.test:
+	- fixed AUTH_USER test
+	
+2009-04-10 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/mod_websh.c:
+	- better logging on error
+	* src/tests/webout.test:
+	- minor beautification of test output
+	* src/generic/script.ws3, src/generic/request_ap.c:
+	- web::request provides AUTH_USER and AUTH_PW if browser provides
+	  an Authorization header and Apache does not handle it.
+	* src/tests/request.test, src/apachetests/test/headers.test,
+	  src/apachetests/docs/headers.ws3:
+	- test [web::request AUTH_USER] and [web::request AUTH_PW]
+	* doc/quickref.xml
+	- documentation for AUTH_USER and AUTH_PW
+	
+2009-02-17 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/apachetests:
+	- Better directory structure
+	- Adapted to invokation through Makefile (in src/unix)
+	* src/unix/Makefile.in:
+	- Added apachetest rule: make apachetest now runs test suite for 
+	  mod_websh
+
+2009-02-11 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* doc/quickref.xml:
+	- Note that web::response -httpresponse does not work with all 
+	  web servers.
+	- Minor fixes
+	* doc/quickref.xsl:
+	- updated to more current docbook version
+	* src/tests/mintest.test:
+	- put a warning when libwebsh is loaded into a tclsh of a 
+	  different version
+	- allow for Tcl8.6
+	* src/unix/tcl.m4:
+	- better help text for configure
+	* src/unix/configure.in:
+	- allow Tcl8.6
+	- try to locate tclsh given in the configuration (not just 
+	  the environment)
+	* src/unix/Makefile.in:
+	- also link to libtclstub for Tcl 8.6
+	* src/win/Makefile:
+	- typo in install rule
+	- fixed dependency of test target
+	- changed default paths and changed Tcl version to 8.5
+	
+2008-03-14 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/unix/Makefile.in:
+	- fixed test rules (LD_LIBRARY_PATH was not set correctly 
+	  on some systems): now refers to Tcl library specified with configure
+	* src/unix/tcl.m4:
+	- allow to configure tcl using --with-tcl only (no need for 
+	  --with-tclinclude if lib/tclConfig.sh and include/tcl.h are sibling
+	  directories
+	
+2008-03-06 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/webutl.c, src/generic/varchannel.c:
+	- bug fix Tcl_Obj life-cycle (fixed crash under Tcl8.5.1)
+	* src/generic/response_ap.c, src/generic/url.c:
+	- fixed Windows version (strcasecmp)
+
+2008-03-04 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/unix/configure.in, src/unix/Makefile.in:
+	- added --with-aprinclude and --with-apuinclude variables 
+	  to configure apr if needed
+
+2008-02-28 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/url.c, src/generic/url.h, src/tests/cmdurl.test:
+	- fixed URL scheme detection (compatibility with Sunone web server)
+	- added test to test scheme detection
+
+2007-09-04 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/dispatch.c, src/generic/webutl.c, src/generic/logutl.c,
+	  src/generic/htmlify.c, src/generic/varchannel.c,
+	  src/generic/modwebsh_cgi.c, src/generic/formdata.c,
+	  src/generic/checksum.c, src/generic/interpool.c,
+	  src/generic/weboutint.c, src/generic/request.c,
+	  src/generic/nca_d.c, src/generic/uricode.c,
+	  src/generic/querystring.c, src/generic/url.c, src/generic/webout.c,
+	  src/generic/messages.c, src/generic/filecounter.c,
+	  src/generic/paramlist.c:
+	- Fixed lots of potentially wrong/missing Tcl_IncrRefCount() and 
+	  Tcl_DecrRefCount() calls.
+
+2007-08-28 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/webutl.c, src/test/dispatch.test:
+	- properly handle multi part forms with extended content-type
+	  this fixes bug 43212 as reported by Dennis Parker
+	
+2007-08-21 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+	* src/generic/mod_websh.c, src/generic/interpool.c:
+	- better logging when no interpreter can be found
+	- removed unnecessary newlines from error log
+	
+2007-04-30 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/response_ap.c:
+	- fix http response for Apache 2.2.1 and later
+
+2007-03-19 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/hashutl.c, src/generic/hashutl.h, src/generic/log.c,
+	  src/generic/log.h, src/generic/macros.h, src/generic/paramlist.c,
+	  src/generic/paramlist.h, src/generic/web.c, src/generic/web.h,
+	  src/generic/webout.h, src/generic/weboutint.c, src/generic/webutl.c,
+	  src/generic/webutl.h:
+	- export some functions to allow dynamic linking on Windows
+
+	* src/unix/Makefile.in, doc/mod_websh/conf/websh.conf, websh.spec:
+	- more consistent installation directories (rpm style)
+	
+2007-03-18 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* websh.spec:
+	- fixed dependencies, paths, and installation
+	  (Thanks to Peter Kohler <peter.kohler@netcetera.ch> for the 
+	  contribution)
+	
+2007-02-12 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/dispatch.c, src/generic/crypt.c, src/generic/logutl.c, 
+	src/generic/htmlify.c, src/generic/formdata.c, src/generic/checksum.c,
+	src/generic/conv.c, src/generic/request_ap.c, src/generic/interpool.c,
+	src/generic/weboutint.c, src/generic/request.c,
+	src/generic/modwebsh_ap.c, src/generic/nca_d.c,
+	src/generic/mod_websh.c, src/generic/uricode.c, src/generic/webout.c,
+	src/generic/filecounter.c, src/generic/log.c, src/generic/filelock.c,
+	src/generic/filelock.h, generic/paramlist.c, src/generic/args.c:
+	Adapted patch from Mikhail Teterin <mi+apache@aldan.algebra.com>
+	- Removed unused local variables to allow compile w/o complaints 
+	  when using -Wall -Werror
+	- Removed some redundant initialization of variables
+        Thanks Mikhail
+	
+2007-01-03 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/win/Makefile:
+	Apache 2.2 compatibility: reference new apr lib if needed
+
+2006-05-22 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/interpool.c:
+	Fixed call to Tcl_Access under Windows (newer Tcl versions)
+	(define R_OK locally instead of using external Windows variable)
+
+	* src/win/Makefile:
+	Default Tcl version set to 8.4
+	
+2006-03-10 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* doc/quickref.xml, doc/quickref.xsl:
+	Added docu for [web::config reset] and clarified [web::config]
+	documentation in general.
+	Added docu for [web::cmdurlcfg -reset] and enhanced example
+	Changed import to docbook release 1.69.1
+	Fixed old [web::dofinalize] typo and [web::interpmap] example format
+
+	* src/tests/msc.test:
+	Changed test for [web::config copyright]
+
+	* src/generic/cfg.c:
+	Fixed result of [web::config cmdparam newvalue] (return old value)
+	Fixed result of [web::config timeparam newvalue] (return old value)
+	Updated output for [web::config copyright]
+	Fixed [wweb::config reset]: also reset encrytchain, decryptchain,
+	putxmarkup, and logsubst
+
+	* src/generic/cfg.c, src/generic/crypt.[hc], src/generic/weboutint.c
+	  src/generic/request.[hc], src/generic/webout.h, src/generic/log.[hc]:
+	Use #define for Default values of [web::config options] uploadfilesize, 
+	timeparam, cmdparam, encryptchain, decryptchain, and logsubst
+	
+	* src/tests/cfg.test:
+	Added test for [web::config reset] and other [web::config] bugs
+
+	* src/generic/webutl.c:
+	Better Tcl RefCount handling in handleConfig()
+
+	* src/generic/interpool.c:
+	Adopt Tcl 8.5 [return -level <lvl>] syntax for redefinition of [exit]
+	(Exiting the script w/o terminating the process in mod_websh)
+	The broken old behavior was exchanged with an error.
+
+	
+2006-03-05 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* <various sources>:
+	Changed version to 3.6.0b4
+
+2006-03-05 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/interpool.c:
+	Call Tcl_InitMemory to allow debugging when compiled with TCL_MEM_DEBUG
+
+	* src/generic/log.c:
+	Fxed memory leak when initializing logData->listOfFilters
+	and logData->listOfDests"
+
+	* src/generic/weboutint.c:
+	Fixed memory leak in webout_eval_tag
+	
+	* src/generic/request.[hc]:
+	Added ExitHandler to make sure tempfiles created with names
+	from [web::tempfile] are deleted correctly when process 
+	terminates properly (e.g. not killed)
+	
+	* src/unix/Makefile.in:
+	Added hint on TCL_MEM_DEBUG
+	Fixed typo in EXTRA_CFLAGS definition
+	Fixed purify and purecov targets
+
+	* src/tests/msc.test, src/test/webout.test:
+	Added web::tempfile -remove test
+	String cleanup: webshell -> Websh
+	
+2006-03-04 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/filecounter.[hc], src/tests/filecounter.test
+	doc/quickref.xml:
+	Added filecounterHandle getval to retrieve current value
+	from filecounter file.
+	Added documentation and tests.
+
+	* src/apachetests/apachetest/*:
+	Compatibility with Apache 2.2 module structure
+
+	* makedist:
+	renamed dist package to websh-<version>-src.tar.gz 
+	(consistend with other source packages in the ASF)
+	
+2005-12-12 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/mod_websh.h, src/generic/mod_websh.c:
+	Compatibility with Apache 2.2 (command_struct)
+
+	* src/unix/Makefile.in:
+	Install directly to prefix (not into websh subdirectory)
+	Refactored ugly hack for Darwin bundle linking of mod_websh
+
+2005-11-16 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* doc/quickref.xml:
+	Added Websh version to title for better identification
+
+	* makedist:
+	Removed verbose tag from tar commands so that makedist doesn't
+	break under (e.g.) FreeBSD.
+	
+2005-11-15 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/uunix/configure.in, src/unix/tcl.m4:
+	Added more locations to search for Tcl and Apache includes 
+	(SuSE Linux defaults)
+	
+2005-11-14 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* doc/mod_websh/conf/websh.conf, src/tests/msc.test,
+	src/tests/logtosyslog.test src/generic/cookie.ws3:
+	Compatibility fixes with OSX (Darwin)
+
+	* src/unix/config.sub, src/unix/config.guess:
+	Replaced with newer versions that support OSX
+
+	* src/unix/Makefile.in, src/unix/configure.in:
+	Changed linking of mod_websh.so for OSX (Darwin)
+	Added --with-httpd option for Apache binary (needed 
+	for -bundle linking on OSX)
+
+2005-11-11 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/unix/configure.in, src/win/Makefile, 
+	src/apachetests/runtests.tcl, websh.spec:
+	Changed version to 3.6.0b3
+
+	* CHANGES:
+	Added enduser readable summary of ChangeLog
+
+	* README:
+	New hint on Windows installation
+	Added details for Unix installation
+	
+	* src/unix/Makefile.in:
+	Major cleanup: removed lots of unused stuff and rewrote
+	install	rules.
+	
+	* src/unix/configure.in:
+	Nicer output of generated configure
+	
+	* src/unix/tcl.m4:
+	Removed lots of unused stuff
+
+	* src/unix/mkinstalldirs, src/unix/memdbg.tcl:
+	Removed (unused, not working)
+
+	* src/win/Makefile:
+	Also install *.lib files
+
+2005-11-10 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* doc/mod_websh/*:
+	Added sample setup for mod_websh
+
+	* src/test/mintest.test, src/tests/htmlify.test:
+	Enhanced tests to run under Windows
+
+	* src/win/Makefile, src/win/README:
+	Major cleanup (no recurrsive calls)
+	Unified flags for websh.exe and mod_websh.so
+	Proper install rule (including sample setup for mod_websh)
+	Build websh<verion>.dll
+	Adapted README accordingly
+
+	* src/generic/interpool.c:
+	Removed unnecessary TclInitStubs call
+
+	* src/generic/web.c, src/generic/web.h:
+	Make Websh_Init exportable under Windows (for websh.dll)
+
+2005-11-03 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/win/Makefile, src/win/README:
+	Attempt to provide a working Windows Makefile
+	(for use with Visual Studio 6's nmake utility)
+	
+	* src/unix/Makefile.in:
+	Moved generated script.h to output directory to
+	prevent clash with generated script.h under Windows
+	
+	* src/tests/filecounter.test, src/tests/filecontext.test,
+	  src/tests/messages.test, src/tests/cfg.test,
+	  src/tests/filelock.test, src/tests/logtosyslog.test,
+	  src/tests/log.test, src/tests/encrypt.test:
+	Tests activated and fixed for Windows
+	Activated some previsously unused tests
+	Deactivated file permission tests for Windows (n/a)
+	
+	* src/generic/logutl.c, src/generic/tclAppInit.c,
+	  src/generic/response_ap.c, src/generic/apchannel.c,
+	  src/generic/request_ap.c, src/generic/interpool.c,
+	  src/generic/mod_websh.c, src/generic/messages.c,
+	  src/generic/webout.h, src/generic/messages.h,
+	  src/generic/web.c, src/generic/log.c:
+	Removed unused local variables
+	Proper Tcl_InitStubs initialization (websh and mod_websh)
+	Some includes added (for Windows)
+	Minor WIN32 fixes
+
+	* src/generic/weboutint.c:
+	Set channel translation to send HTTP headers correctly under Windows
+	
+2005-10-28 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* <various sources>:
+	Changed version to Websh 3.6.0b2 (too many changes in the
+	commands for a successor Websh 3.5.x version)
+	
+	* src/unix/configure.in, src/unix/Makefile.in:
+	Adapted for Tcl 8.5
+	Major cleanup started
+	
+	* src/generic/mod_websh.c:
+	Fixed call to ap_log_error for Apache 2 (prevent compiler
+	warning due to NULL to 0 conversion)
+	
+	* doc/Makefile, doc/quickref.xml:
+	Documentation of recent changes in logging
+	Renamed web::logfilter to new web::loglevel
+	Various minor fixes
+
+	* src/generic/log.[hc], src/tests/log.test:
+	Renamed web::logfilter to web::loglevel
+	(web::logfilter is still available for backward compatibility,
+	but considered deprecated)
+	Adapted tests accordingly
+
+	* src/generic/script.ws3, src/tests/*.test:
+	Use new web::loglevel instead of web::logfilter, which is 
+	now deprecated.
+	
+2005-10-27 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/script.ws3, src/tests/log.test:
+	Moved cleanup from web::ap::perReqInit to web::ap::perReqCleanup
+	to speed up request handling
+	Delete only log filters and destinations created during the
+	request and not the ones created in web::initializer
+	Wrote a test for it
+
+	* src/generic/log.[hc], src/generic/modwebsh_ap.c, src/generic/modwebsh_cgi.c:
+	Added keep flag to LogDest and LogLevel structs to keep track of
+	levels and filters to keep across requests (the ones created in
+	web::initializer code)
+	Added special command to delete all but these levels and filters
+	(web::logfilter delete -requests and web::logdest delete -requests)
+	to be used in web::ap::perReqCleanup
+	Adapted Web_Initializer to accommodate this functionality
+
+	* src/test/log.test, src/generic/log.[hc], src/generic/logutl.c:
+	Changed behaviour of web::logdest names and web::logfilter names
+	to return proper list of names (for consistency reasons)
+	Added web::logdest levels and web::logfilter levels options to
+	replace function of previous names option (needed for test suite only)
+	Internal names of logfilters and logdests with decimal counter
+	for consistency with other internal Tcl names (files sockets etc.)
+	Modified usage error messages for web::logdest and web::logfilter
+	to comply to Tcl standard
+	Refactored log filters and levels to reside in an array so that
+	names can be reused after deletion (needed for mod_websh, because
+	otherwise, we run out of names sooner or later)
+	Adapted and added tests accordingly
+
+	* src/tests/dispatch.test, src/tests/webtest.ws3:
+	optimized output during test runs
+
+	* src/generic/mod_websh.c:
+	typo in log msg
+
+2005-10-16 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* makedist:
+	Adapted to run under SVN (after migration from CVS)
+	
+2005-09-09 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/unix/configure.in:
+	changed to version 3.5.1b1
+
+	* src/generic/htmlify.c, src/generic/weboutint.c:
+	handle multibyte characters in web::htmlify and web::putx correctly.
+	Many thanks to Taguchi Takeshi.
+
+	* src/generic/formdata.c:
+	save and reapplay channel enconding when setting translation to
+	binary (to avoid side effects). Thanks to Taguchi Takeshi
+
+	* src/test/mintest.test:
+	allow newer versions of tclsh for library test 
+
+	* src/generic/formdata.c:
+	removed unused function dumpBody (not referenced anywhere)
+	
+	* src/generic/cfg.c, src/generic/filecounter.[hc], src/generic/formdata.c, src/generic/log.[hc], src/generic/logtofile.c, src/generic/request.[hc], src/generic/sessctx.ws3, src/generic/web.c:
+	All file permissions of created files configurable:
+	log files, session files, filecounter, temporary files
+	from multipart form file upload.
+	Default is 0644. (Note that previously, the default for session files
+	was 0666. All other defaults where already set to 0644.)
+	
+	* src/test/cfg.test:
+	added tests for web::config filepermissions and
+	its effects.
+
+	* src/unix/Makefile.in:
+	set umask to 0 when running tests, so that file permission tests work
+
+	* doc/quickref.xml:
+	documented web::config filepermissions and adapted documentation
+	for web::formvar, web::filecounter, and web::filecontext.
+	Removed wrong note in web::config putxmarkup about not being able
+	to nest evaluation using the tag (<? ?>) syntax in web::putx, which
+	is possible for a long time now.
+	
+2005-09-07 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* doc/quickref.xml
+	fixed documentation of web::dehtmlify (thanks to Holger Jakobs)
+
+2005-09-05 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/unix/configure.in:
+	ensure compatibility with Tcl8.5
+	
+2005-08-29 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/context.tcl, src/generic/cookie.ws3, tests/context.test, tests/cookiecontext.test, doc/quickref.xml:
+	ensure compatibility with Tcl8.5
+	
+2005-08-17 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/cookie.ws3:
+	fixed locale dependency side effect of cookie expiry
+	
+2005-07-15 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/generic/weboutint.c, src/tests/webout.test:
+	fixed handling of tag in putx (problems with '?') and 
+	wrote some tests for it
+
+2005-07-01 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* doc/quickref.xsl:
+	fixed URL to docbook to newer version
+
+	* doc/quickref.xml:
+	fixed documentation of web::dispatch -postdata
+
+	* src/generic/dispatch.c:
+	fixed error string of web::dispatch -postdata syntax
+
+2004-12-13 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* src/unix/config.guess, src/unix/config.sub:
+	config.sub and config.guess (avoids problems with some 
+	autoconf versions)
+
+2004-11-16 Brunner Ronnie <ronnie.brunner@netcetera.ch>
+
+	* doc/quickref.xml:
+	fixed documentation of web::logdest 
+	(explanation for -format and -maxchar options)
+
+2004-09-15  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/cookie.ws3, src/tests/cookiecontext.test:
+	fixed expiry of cookies: expiry can be given in seconds and
+	in any relative format known to tcl (such as "2 days")
+	resolved locale dependecy that broke expiry format with tcl8.4
+	and higher
+
+	* doc/quickref.xml:
+	clearified documentation of expiry option for web::cookiecontext
+	
+2004-04-30  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/webout.c, src/tests/webout.test:
+	set back response object after web::putx and accoring tests
+
+2004-03-24  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/tclAppInit.c:
+	removed old SUN OS compatibilty hack (not needed anymore)
+
+	* src/generic/checksum.c:
+	hack around gcc optimization problem
+	(thanks to Jason Brazile for the "volatile" hint ...)
+
+2004-03-12  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/tests/msc.test:
+	cleanup environment in modwebsh-1.6, so tcltest does not complain
+	
+2004-03-01  David N. Welton  <davidw@dedasys.com>
+
+	* LICENSE: Added Apache License, version 2.0.
+
+2004-03-01  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/messages.c:
+	removed unused include which fails with newer Solaris cc
+
+	* src/generic/formdata.c:
+	fixed minor memory leak in parseMultipartFormData
+
+	* src/generic/varchannel.c:
+	removed unused header include (webutl.h)
+
+	* src/tests/logtofile.test:
+	added logtofile-3.1 test (coverage of web::log to file)
+
+	* src/tests/cookiecontext.test:
+	fixed cookie tests to match proper cookie expiry format
+	changed webshell to Websh (just for beauty reasons ;-)
+
+	* src/tests/msc.test:
+	added coverage tests for cgi modwebsh stubs
+
+	* src/generic/webutl.c, src/generic/webutl.h:
+	removed unused functions tclMyConcat and Web_IntIncrObj
+	
+	* src/generic/hashutl.c, src/generic/hashutl.h:
+	removed unused function (resetHashIterator)
+
+2004-02-03  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/cookie.ws3:
+	fixed cookie expiry date format to meet Netscape specs
+        (http://wp.netscape.com/newsref/std/cookie_spec.html)
+	
+2003-11-15  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/interpool.c:
+	bug fix in web::interpmap (files with spaces in names)
+
+	* src/generic/formdata.c
+	potential bug fix of call to web::uri2list
+
+2003-10-31  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* doc/quickref.xml:
+	added documentation for context::delete
+	added documentation for web::config cmdurltimestamp
+
+2003-05-27  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* INSTALL, README:
+	added hint on GNU make extensions
+	
+2003-02-28  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* doc/quickref.xml:
+	fixed documentation of web::cmdurlcfg and web::request
+
+2002-11-26  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/weboutint.c, src/tests/script.test:
+	bug fix of web::putx and web::putxfile (double UTF encoding)
+	patch submitted by David Welton (Thanx David)
+
+2002-11-22  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* doc/quickref.xml:
+	added documentation of web::formvar (file upload)
+
+2002-11-13  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/url.c:
+	fixed core dump when [web::cmdurl] called scheme in urlformat
+
+	* src/tests/cmdurl.test:
+	added test to test bug that has been fixed today
+
+2002-09-11  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* src/generic/*.[ch]:
+	fixed different declarations for Tcl8.4: added TCLCONST define
+	in macros.h, which is set according to the tcl version
+
+	* src/unix/configure.in:
+	added tcl8.4 to search for Tcl	
+	changed to version 3.5.1a1
+
+	* src/tests/webout.test:
+	compatibility with strange version numbers
+	
+	* src/generic/cfg.h, src/generic/modwebsh.h, src/generic/request.c, src/generic/webout.c:
+	tweaked header file includes for win32
+
+	* src/generic/tcldecmt.tcl:
+	tweaked line length of output for win32
+	
+2002-08-01  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* Released Version 3.5.0
+
+2002-08-01  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* makedist:
+	added makedist to create tar balls from actual and previous builds
+
+	* apachetests/runtests.tcl:
+	fixed reference to mod_websh.so (proper version)
+	
+	* unix/Makefile.in:
+	disabled dist target (referred to ../../makedist)
+	removed a bunch of unused stuff
+
+	* src/unix/configure.in:
+	removed initcode from cleanfiles
+	
+2002-07-31  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* INSTALL, README:
+	added autoconf and other info to compile instructions
+
+	* websh-spec:
+	dynamic version of mod_websh, added make websh
+
+	* doc/faq.html:
+	removed (redundant to tcl-site/websh/faq.ws3)
+
+	* examples/README:
+	added (just a note of caution not to use the examples)
+
+	* Announce, src/Makefile, unix/Makefile.modwebsh, win/script.h:
+	removed (outdated, unused ...)
+	
+	* license.terms:
+	fixed typo
+
+	* generic/cfg.c, /generic/cfg.h, generic/webout.h:
+	harmonized different outputs of Websh's version
+
+	* tests/webout.test:
+	fixed teast ouptut-4.4: adapted for new version output
+
+	* src/unix/configure.in:
+	fixed NODOT_VERSION (currently unused)
+
+2002-07-30  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/web.c (Websh_Init):
+	provide package websh
+	
+	* ChangeLog, changes: 
+	incorporated file "changes", which is now removed
+
+2002-07-29  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* INSTALL: 
+	added hint for threads
+
+2002-07-28  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* quickref.xml: 
+	added explanation of # to web::put*
+
+2002-07-27  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* quickref.xml, quickref.xsl: 
+	fixed links to examples
+	formal cleanup
+	
+2002-07-25  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/cfg.c, generic/cfg.h (cfg_Init):
+	fixed memory leak temporarily (added fixme)
+
+	* generic/request.c, generic/request.h (request_Init):
+	fixed memory leak temporarily (added fixme)
+
+	* generic/tclAppInit.c, generic/web.c, generic/web.h (no changes):
+	committed some booboos and refixed them later (later revisions
+	are equal to revisions before I messed up...)
+	
+	* generic/weboutint.c (webout_eval_tag):
+	fixed memory leak in web::putx
+	
+2002-07-24  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/interpool.c (poolGetWebInterp):
+	proper return (unlock on error)
+
+	* generic/request_ap.c (requestFillRequestValues):
+	removed minor memory leak (initialized but unused Tcl_Obj)
+	
+2002-07-16  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/dispatch.c (Web_Dispatch):
+	keep error msg when <hook> fails in web::dispatch -hook <hook>
+
+2002-06-16  David N. Welton  <davidw@dedasys.com>
+
+	* unix/Makefile.in (dist): Made dist target and distdoc target.
+	These can be used to roll releases.
+
+2002-06-10  David N. Welton  <davidw@dedasys.com>
+
+	* quickref.xml: Added 'replaceable' elements.
+
+	* quickref.xsl: Updated to latest XSL work.
+
+2002-06-04  David N. Welton  <davidw@dedasys.com>
+
+	* Moved README one directory up, created INSTALL file.
+
+2002-04-26  David N. Welton  <davidw@dedasys.com>
+
+	* quickref.xml: Changed 'title' to 'emphasis' in order to avoid
+	having examples sections listed in the table of contents.
+
+2002-04-25  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* tests/script.test:
+	fixes for tcl8.4 (new error strings)
+
+	* tests/webout.test:
+	fixed tests output-4.4 and output-4.1
+
+2002-04-19  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* apachetests/runtests.tcl, apachetests/apachetest/apachetest.tcl, apachetests/apachetest/template.conf.tcl:
+	solved configuration problems for apache-1.3.24
+
+2002-04-18  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/cfg.c (Web_Cfg):
+	removed handling of [web::config script]
+	call Web_ConfigPath in Web_Cfg to handle all mod_webh specific stuff
+
+	* generic/mod_websh.c, generic/mod_websh.h:
+	added a second assoc data to pool interpreter
+
+	* generic/modwebsh_ap.c, generic/modwebsh_cgi.c, generic/modwebsh.h:
+	added Web_ConfigPath
+
+	* generic/request_ap.c, generic/request_cgi.c, generic/request.h:
+	removed requestScriptName
+
+	* apachetests/hello.test, apachetests/hello.ws3,
+	apachetests/websh.conf, apachetest/apachetest.tcl:
+	created test for new web::config stuff
+
+2002-04-17  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* tests/cfg.test:
+	fixed cfg-1.1 (new subcommands)
+
+	* tests/msc.test:
+	fixed copyright-1.0 (new web site url)
+
+2002-04-10  David N. Welton  <davidw@dedasys.com>
+
+	* Makefile (quickref.html): Use catalogs for XML processing.
+
+2002-04-09  David N. Welton  <davidw@dedasys.com>
+
+	* quickref.xsl: Added 'monounderlineseq' for options.  Looks
+	better visually.
+
+2002-04-09  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* apachetests/*:
+	made all tests work for Apache 1.3 and Apache 2.0
+
+	* generic/cfg.c, generic/macros.h, generic/webout.h:
+	fixed copyright notice
+	removed copyright in Generator
+	removed (now) unnecessary define NETCETERA
+
+	* generic/mod_websh.c:
+	set proper handler for Apache 2 (changed websh-script to websh)
+
+	* generic/modwebsh_ap.c:
+	make it compile under Apache 2.0 and Solaris (include <sys/stat.h>)
+
+	* tests/webout.test:
+	fixed tests output-4.4 and output-4.1
+
+2002-04-05  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/interpool.c:
+	removed unnecessary check and don't destroyPool on error
+	(The state we're in when we have an error is very unclear
+	and it should be checked eventually, but for normal operation
+	this doesn't matter)
+
+	* generic/messages.c, generic/messages.h:
+	renamed MAGIC and WEB_MSG_VERSION (consistency, no other impact)
+
+	* generic/modwebsh_ap.c:
+	fixed naming (dofinalize -> finalize)
+	slightly change error handling (return proper result instead of logging
+	to apache in case of 'wrong # args')
+
+	* generic/modwebsh_cgi.c:
+	proper error handling in dummy procs (web::initializer
+	and web::finalizer)
+
+2002-04-02  David N. Welton  <davidw@dedasys.com>
+
+	* quickref.xsl: <arg choice="plain"> now outputs monoseq text, to
+	indicate when an argument must be inserted literally, as a
+	subcommand.
+
+2002-03-28  David N. Welton  <davidw@dedasys.com>
+
+	* generic/interpool.c (initPool): Removed 'called' - it can only
+	happen once.  Thanks to Ronnie.
+
+2002-03-27  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/formdata.c (parseUrlEncodedFormData, parseMultipartFormData):
+	set back channels after reading form data
+
+2002-03-27  David N. Welton  <davidw@dedasys.com>
+
+	* generic/interpool.c (initPool): Remove locking, as this is
+	called from the child_init area, which shouldn't be
+	multi-threaded.  Thanks to Ronnie for pointing this out.
+
+2002-03-21  David N. Welton  <davidw@dedasys.com>
+
+	* quickref.xml: Changed documentation for web::log, which now
+	defaults to not running 'subst' on its arguments.
+
+2002-03-20  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/paramlist.c (paramGetIndexFromObj): removed fixed allocation
+	(is a bit slower though since we need to find out how much to allocate)
+
+	* tests/dispatch.test: fixed dispatch-5.14
+
+2002-03-19  David N. Welton  <davidw@dedasys.com>
+
+	* generic/mod_websh.c (merge_websh_config): Don't reset the locks
+	here.
+
+	* generic/log.c (destroyLogPlugIn): Send something to stderr if
+	there is no plugin.
+
+2002-03-18  David N. Welton  <davidw@dedasys.com>
+
+	* apachetests: Added new, modularized test system.  Should allow
+	easier sharing of improvements across Apache Tcl projects.
+
+2002-03-11  David N. Welton  <davidw@dedasys.com>
+
+	* quickref.xml: changed <...> to <option>...</option.
+
+2002-03-08  David N. Welton  <davidw@dedasys.com>
+
+	* quickref.xsl: Added our own custom .xsl file for Tcl style
+	output.
+
+2002-03-07  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/filecounter.c, generic/filecounter.h:
+	- added configurable permissions
+	- fixed comments to fit into 80 char columns
+	- changed behavior of -wrap to match documentation
+	- set all default into header file
+
+	* generic/interpool.c, generic/interpool.h:
+	- typecast logToAp (so it does not conflit with other plugins)
+	- added a numerical id to every webInterp (fo easier identification)
+	- always log the id and the class when logging about interps
+	- fixed some calls to apache log (diffs for ap 1.3 and ap 2.0)
+
+	* generic/logtocmd.c (logToCmd):
+	avoid compiler warning: type cast in logToCmd
+
+	* tests/filecounter.test: fixed tests 2.7, 2.8, and 2.9 to
+	comply with new option -perms and changed option -wrap
+
+	* doc/quickref.xml: fixed documentation of web::filecounter:
+	added default values and -perms option
+
+2002-03-07  David N. Welton  <davidw@dedasys.com>
+
+	* generic/logtocmd.c (logToCmd): Use a real list instead of a
+	DString.
+
+	* tests/cmdurl.test (getquerystringfromurl): Changed tests to use
+	getquerystringfromurl instead of web::querystring::getfromurl.
+
+	* generic/interpool.c (initPool): Make sure we are only called
+	once.
+
+	* generic/querystring.c: delete Web_GetQueryStringFromUrl
+	function/command.
+
+	* unix/Makefile.in: Avoid the final link step if it's already been
+	performed, for websh, and mod_websh.so.
+
+2002-03-06  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/interpool.c (readWebInterpCode): use
+	Tcl_ErrnoMsg(Tcl_GetErrno()) instead of Tcl_PosixError(interp),
+	because it's independent of interp
+
+	* generic/logtoap.c, generic/logtoap.h (logToAp):
+	added additional formatting capabilities to logToAp
+
+	* generic/request.c: include sys/errno.h, fixed logging of
+	unsuccessful tempfile removal
+
+	* gneric/response_ap.c (apHeaderHandler):
+	Fixed sending of multiple headers
+
+2002-03-05  David N. Welton  <davidw@dedasys.com>
+
+	* generic/request.c (removeTempFiles): Log error on failure of
+	'remove'.
+
+	* generic/paramlist.c (paramGetIndexFromObj): stopgap fix to make
+	sure we don't overflow.
+	(paramGet): 'default' in switch statement returns error, but we
+	should never arrive there.
+
+	* generic/mod_websh.c (websh_init_child): Create Apache log entry
+	if initPool doesn't return an OK.
+
+	* generic/modwebsh_ap.c (Web_InterpClassCfg): Pass mtime to
+	createWebInterpClass after fetching it with Tcl_Stat.
+
+	* generic/interpool.c (createWebInterp): Fixed fixme - log error
+	to Apache.
+	(poolGetWebInterp): Switched to request_rec.request_time.
+	(createWebInterp): Use request_rec.request_time, and also add
+	request_rec as a parameter to createWebInterp.
+	(createWebInterp): Log readWebInterpCode failure via Apache.
+	(destroyWebInterp): Log web::finalize errors to Apache logs.
+
+2002-03-05  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/mod_websh.c:
+	API change for Apache 2 (register_hooks and ap_log_error)
+
+	* generic/request_ap.c (requestFillRequestValues):
+	expclicit type cast to satisfy compiler
+
+	* generic/webout.c (Web_Response): added type cast to
+	avoid compiler warning (Solaris cc)
+
+2002-02-27  David N. Welton  <davidw@dedasys.com>
+
+	* unix/configure.in: Changed version to 3.5.
+
+	* generic/request.c (createRequestData): Removed
+	handleToSpecificReqData here and elsewhere - it's handled in other
+	ways (through set/get assocdata).
+
+	* generic/mod_websh.c: We *don't* check for files' existance,
+	because they might be mapped with interpmap, and might not even
+	really exist.
+
+	* generic/interpool.c (poolGetWebInterp): Use Tcl_Stat instead of
+	'file mstat' called with Tcl_Eval to get mtime.
+
+	* apachetests/template.conf.tcl: Change port to 8081, instead of
+	8080, because some people already use that for a test server.
+
+	* apachetests/runtests.tcl: We no longer start the server
+	automatically.
+
+	* Added headers.ws3 and headers.test files, to be used for header
+	testing.
+
+	* apachetests/mod_websh.test (server::start): Created
+	server::start and server::stop commands for use in tests.
+
+2002-02-19  David N. Welton  <davidw@dedasys.com>
+
+	* tests/webout.test: Removed test for {= tags.
+
+	* generic/mod_websh.c (exit_websh_pool): Added this as a
+	registered cleanup.
+
+	* generic/mod_websh.c (websh_handler): Do correct checks for
+	Apache2.
+
+	* doc/quickref.xml: fixed web::interpclasscfg default of maxrequests
+
+2002-02-18  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/interpool.c (poolReleaseWebInterp):
+	allow interps to live forever when maxrequests == 0
+
+2002-02-14  David N. Welton  <davidw@dedasys.com>
+
+	* generic/weboutint.c (webout_eval_tag): Workaround to avoid
+	printing headers if the very first thing in putx is an opening
+	tag, starting a block of Tcl code.
+
+2002-02-12  David N. Welton  <davidw@dedasys.com>
+
+	* generic/url.c (Web_CmdUrlCfg): Change to use two variables for
+	'scheme' - one as a config, and one to hold the actual value.
+
+2002-02-05  David N. Welton  <davidw@dedasys.com>
+
+	* websh.spec: Fix-ups to make websh.spec work better - generates
+	RPM's now on my system.
+
+	* unix/Makefile.in (install-doc): Moved install doc to be near
+	  other 'install' targets.  Make install-doc use DESTDIR instead
+	  of prefix variable.
+
+2001-12-28  David N. Welton  <davidw@dedasys.com>
+
+	* generic/uricode.c (uriDecode): Fixed comparisons to work with
+	'char *' instead of specifying signed/unsigned.
+
+2001-12-28  Ronnie Brunner <ronnie.brunner@netcetera.ch>
+
+	* generic/tcldecmt.tcl: escaped newline in output
+	(Solaris cc does not like newlines in string literals)
+
+	* unix/Makefile.in: delete ../generic/script.h in clean rule
+
+2001-12-12  David N. Welton  <davidw@dedasys.com>
+
+	* generic/webout.c (Web_Response): Add web::response -select
+	default to get set channel for both web and CGI.
+
+	* generic/request.h: Add requestGetDefaultOutChannelName.
+
+	* tests/webout.test: Add test for web::response -select default.
+
+2001-12-03  David N. Welton  <davidw@dedasys.com>
+
+	* generic/cfg.c (Web_Cfg): Create a "web::config reset" command,
+	which resets cmdurltimestamp, uploadfilesize, timeparam and
+	cmdparam.
+
+	* generic/request.c (resetRequestData): #if out resetting of
+	variables configured via web::config.
+
+2001-11-30  David N. Welton  <davidw@dedasys.com>
+
+	* webshinspect.ws3 (web): Added -path to filecontext.
+
+	* filecontext.tests: Added -path elements to filecontexts.
+
+	* generic/sessctx.ws3: Make -join a mandatory argument for filecontext.
+
+	* generic/mod_websh.c: move initPool to Child Init function.
+
+2001-11-23  David N. Welton  <davidw@dedasys.com>
+
+	* generic/tcldecmt.tcl: Add newlines/newline quoting backslashes
+	to mirror the script in Tcl's initScript.
+
+	* generic/cfg.c (Web_Cfg): cmdUrlTimestamp changes.
+
+2001-11-22  David N. Welton  <davidw@dedasys.com>
+
+	* generic/url.c (createUrlData): First cut at making cmdurl scheme
+	bswitch between https and http depending on environmental variables.
+
+	* tests/dispatch.test: Changes necessary here to correctly handle
+	errors that are now propogated from web::dispatch.
+
+	* generic/dispatch.c (Web_Dispatch): Propogate errors from
+	parsePostData.
+
+	* cfg.c: Added CMDURLTIMESTAMP as a global option that may be
+	configured with web::config.
+
+	* unix/configure.in: Added debugging flags.
+
+	* generic/request_ap.c (requestFillRequestValues): Make
+	requestFillRequestValues return TCL_ERROR instead of NULL.
+
+	* generic/context.tcl: Added 'delete' proc for contexts.
+
+	* Added apachetests directory.
+
+	* generic/log.c (createLogData): Change logSubst to default to 0
+	(off).
+
+2001-11-07  David N. Welton  <davidw@dedasys.com>
+
+	* generic/uricode.c (uriDecode): changed 'utf' to be a signed
+	character, so that the comparison with 0 works on all
+	architectures.
+
+	* generic/tcldecmt.tcl: Extend functionality to do multiple files,
+	and properly quote \ and " characters for use in a C string.
+
+	* unix/Makefile.in: Replaced shell commands with more
+	functionality in tcldecmt.tcl script.
+
+2001-11-05  David N. Welton  <davidw@dedasys.com>
+
+	* unix/configure.in: Moved to this directory from src/.
+
+2001-03-14  Simon Hefti <simon.hefti@netcetera.ch>
+
+	* webutl.c: fixed setting global var for web::response command
+	* web::response error messages improved
+	* quickref updated
+	* web::dehtmlify bug fix
+
+2001-01-21  Simon Hefti <simon.hefti@netcetera.ch>
+
+	* sessctx.ws3 supports web::init 1 -create
+	  which creates the session file, if it does not exists yet,
+	  whithout throwing an error. Also, allow capitals in
+	  session id's.
+
+	* varchannel.c: let Tcl handle the global variables, especially
+	  when ref counter > 0, Also, suppress error message which
+	  Tcl leavs in the interp if a channel does not exist yet,
+	  if we could create it successfully.
+
+	* filecontext.test:  test "valid id" checker, and "-create" option
+	  of filecontext
+
+	* webout.test: test channel switching
+
+	* args.c: new function argdbg to write out arguments
+
+	* cookie.ws3: new init prototype requires additional,
+	  optional argument (-create). Added, even thouh it is unused here.
+
+	* log.c: better check of valid options in web::logdest
+
+2001-01-01  Simon Hefti <simon.hefti@netcetera.ch>
+
+	* used -DTCL_MEM_DEBUG to find the last memory leaks. 2 found amd
+ 	fixed. A lot of "potentially leaked" (as indicated by purify)
+ 	disappear if test suite is run in a seperate interp
+	(using interp create) and interp is deleted afterwards. In other
+ 	words: this is housekeeping data that is properly freed when the
+ 	interp is destroyed.
+
+	* parsing of multipart/formdata: more indicative log messages
+ 	hinting to the prominent boundary problem (a boundary with lots of
+ 	dashes makes it easy to overlook the first two).
+
+	* varchannel: solved encoding problem by using Tcl_GetByteArray
+ 	instead of Tcl_GetString
+
+	* web::dispatch tests: since bad postdata do not throw errors any
+ 	longer (websh tries to answer the request even in case of bad
+ 	postdata) we had to rewrite the tests which checked those
+ 	errors. log entry is checked now instead.
+
+
+2000-11-14  Simon Hefti <simon.hefti@netcetera.ch>
+
+	3.0b3 release
+
+	This is a test release - some stuff needs to be finished.
+	Particularly: search for potential memory leaks, and Windows
+	stuff.
+
+	The API is final. mod_websh builds and runs on Linux and Solaris
+	using apach 1.3.x.
+
+2000-04-27  Simon Hefti <simon.hefti@netcetera.ch>
+
+	3.0b2 beta-2 release of Websh 3
+
+	The Apache Module added - is known to build and run
+	on SunOs-5.6 and on Linux.
+
+	Several minor bug fixes - at Netcetera, this Websh is in
+	productive use since beta-1.
+
+	* mod_websh commands introduced:
+	  web::interpclass
+	  web::initializer
+	  web::finalizer
+	  web::dofinalize
+	  web::maineval
+	  web::interpid
+	  web::interppool
+	* log plugin for apache added (aplog)
+	* web::setupcontext renamed to web::context
+	* web::request -channel introduced
+	* lencrypt, ldecrypt removed
+	* web::asciify85, web::asciify64 removed
+
+
+2000-03-20  Simon Hefti <simon.hefti@netcetera.ch>
+
+	3.0b1 beta-1 release of Websh 3
+
+	This release is known to compile and run on SunOS-5.5.1 and Linux
+ 	and should do so on most UNIX variants.
+
+	The Apache Module is missing in this release.
+
+	* session management built-in
+	* by default, the log module subsitutues vaiable and command names of
+	  the log message
+	* lencrypt, ldecrypt introduced
+	* web::response replaces command web::output
+	* web::request provides access to the request object
+	  (CGI environment vars or Apache Module data)
+
+2000-03-07  Simon Hefti <simon.hefti@netcetera.ch>
+
+	3.0a1 alpha-1 release of Websh 3
+
+	first release
+
+	This release is known to compile and run on SunOs-5.5.1.
+	A couple of tests of the test suite are marked as "empty" and
+ 	skipped.
+	The session management module is missing in this release.
+	The Apache Module is missing in this release.

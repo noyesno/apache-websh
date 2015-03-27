@@ -1,0 +1,20 @@
+# $Id: headers.ws3 764044 2009-04-10 20:42:22Z ronnie $
+# headers test code
+
+web::command default {
+    web::response -set Foo bar bla que
+    web::response -set Header1 foo
+    web::response -set Header1 bar
+    web::response -set Header2 Foo
+    web::response -lappend Header2 Bar
+    web::put "hi world"
+}
+
+web::command auth {
+    set user [web::request AUTH_USER]
+    set pass [web::request AUTH_PW]
+    web::put "$user*$pass"
+}
+
+web::dispatch
+

@@ -1,0 +1,192 @@
+CHANGES
+=======
+
+This file summarizes bug fixes and changes to the commands
+for different versions.
+Please refer to src/ChangeLog for a detailed log of changes
+
+
+Known Issues
+------------
+
+- On Windows, when running mod_websh against Apache 1.3.41,
+  [web::config server_root] returns garbage (won't be fixed)
+
+- On Windows, mod_websh sometimes crashes with Tcl 8.5 and Tcl8.6
+  in Apache 2.0 or greater.
+
+
+Websh 3.6.0b5 (2009-09-14)
+--------------------------
+
+- Fixed some memory leaks and improved refcount handling in general
+
+- Improved test suite to be able to run repeatedly
+
+- Improved/streamlined Tcl_InitStubs handling
+
+- Added [web::config safelog] configuration to allow web::log to properly
+  throw errors if I/O fails (if safelog is set to 0). Default is 1 to ensure
+  backward compatibility.
+
+- Fixed log handling for logtochannel plugin: reliable channel handling
+
+- Added simple pkgIndex.tcl to installation
+
+- Bug fix in web::cmdurl when using -urlformat
+
+- Dynamic linking of libwebsh.so|dll to websh binary and mod_websh.so
+
+- Improved Cookie handling (deal with unusual format)
+
+- Enabled mod_websh tests for Windows platform
+  (Use 'nmake apachetest' to test mod_websh within Apache under Windows)
+
+- web::request now provides AUTH_USER and AUTH_PW if Authorization 
+  header is sent, and Apache does not handle it (i.e. does not provide 
+  the REMOTE_USER variable). Refer to the quick reference for an 
+  explanation about how to make it work in CGI.
+
+- Revamped mod_websh tests: better directory structure and integration
+  into src/unix/Makefile: 'make apachetest' now runs the test suite
+
+- Compiles with Tcl 8.6
+
+- Minor documentation fixes
+
+- Fixed test and install targets in Windows Makefile
+
+- Easier ./configure handling (--with-tcl can now cover lib and include)
+
+- Bug fix Unix Makefile test rule was broken on some systems 
+
+- Added --with-aprinclude and --with-apuinclude variables to configure
+
+- CGI https scheme detection compatibility with Sunone web server
+
+- Bug fixes regarding wrong usage of Tcl API
+
+- Bug fix when handling multipart forms (Bug 43212)
+
+- Better logging when mod_websh cannot get a Tcl interpreter for a request
+
+- Fixed http response problem with Apache 2.2.1 and later
+
+- Fixed websh.spec dependencies, paths, and improved installation 
+  directories (more common rpm style) for Unix
+
+- Cleanup of unused local variables and some redundant initializations 
+  of local variables throughout the code (compile with -Wall w/o warnings)
+
+- Fix of html file handling in mod_websh under Windows
+
+- Added documentation of [web::config reset] and [web::cmdurlcfg]
+  and other minor fixes in quickref
+
+- Updated [web::config copyright] output
+
+- Fixed [web::config key ?value?] to always return old value
+
+- Fixed [web::config reset] to reset all configuration options
+
+- Use Tcl8.5 feature [return -level <lvl>] to rewrite exit so that script
+  in mod_websh terminates w/o terminating the process. (Only attempts this
+  with Tcl >= 8.5. In older versions of Tcl mod_websh will throw an 
+  error when exit is called, but not terminate the process either.)
+
+
+Websh 3.6.0b4 (2006-03-05)
+--------------------------
+
+- Added Tcl [memory] command to mod_websh when compiled with TCL_MEM_DEBUG
+  (Note: Tcl must also be compiled with TCL_MEM_DEBUG for this to work)
+
+- Memory leaks fixed (logging and web::putx)
+
+- Files created using filenames from [web::tempfile] are now always deleted 
+  as long as the process terminates properly (e.g. is not killed)
+
+- Makefile targets for purify and pure coverage fixed
+
+- Added getval option to filecounter handle to retrieve current value from 
+  filecounter file (see documentation of web::filecounter)
+
+- Compatibility with Apache 2.2
+
+- Installation under Unix directly to prefix, not prefix/websh, 
+  which is more common.
+
+- Configuration and test compatibility fixes for OSX Darwin
+
+
+Websh 3.6.0b3 (2005-11-11)
+--------------------------
+
+- Windows XP Makefile provided (for Visual Studio 6 nmake)
+
+- Install for Unix fixed
+
+- Added simple setup example for mod_websh
+
+
+Websh 3.6.0b2 (2005-10-28)
+--------------------------
+
+- Renamed [web::logfilter] to [web::loglevel] (kept [web::logfilter] for
+  compatibility)
+
+- When logging is setup in [web::initializer], it is kept across
+  requests and is still available in [web::finalizer]
+
+- Internal commands [web::loglevel delete -requests] and [web::logdest
+  delete -requests] to delete log configuration added during request
+  only
+
+- Changed output of [web::loglevel names] and [web::logdest names] to
+  return a list of names (as the command indicates)
+  Added [web::loglevel levels] and [web::logdest levels] to provide
+  the functionality formerly provided by the names subcommand (used
+  for testing only)
+
+
+Websh 3.5.1b1 (unreleased)
+--------------------------
+
+- I18n fixes to support multi-byte character sets
+
+- Unix: All file permissions of created files configurable with
+  [web::config filepermissions]. Default is 0644. (This affects log
+  files, session files, filecounter files, and temporary form upload
+  files) Note that prevously, the default permissions for session
+  files was 0666.
+
+- Fixed some documentation errors/omissions in the reference
+
+- Works with Tcl8.5
+
+- Fixed [web::putx] some problems with tag syntax (<? ?>), selection
+  of response object, and double UTF encoding
+
+- Resolved cookie handling side effects when dealing with different
+  locales and fixed expiry to conform to specs
+
+- Unix: provide config.sub and config.guess for some versions of
+  autoconf
+
+- Fixed minor memory leaks (when dealing with multipart form data)
+
+- Fixed [web::interpmap] to work with spaces in file names
+
+- Fixed [web::cmdurl] when scheme is given in urlformat
+
+
+Websh 3.5.1a1 (unreleased)
+--------------------------
+
+- Works with Tcl 8.4
+
+
+Websh 3.5.0
+-----------
+
+- See src/ChangeLog

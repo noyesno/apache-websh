@@ -1,0 +1,16 @@
+# $Id: hello.ws3 764902 2009-04-14 17:53:16Z ronnie $
+# hello world websh code.
+
+web::command default {
+    web::put "Hello, World\n"
+    web::put "script: [web::config script]\n"
+    web::put "server_root: [web::config server_root]\n"
+    web::put "document_root: [web::config document_root]\n"
+    web::put "interpclass: [web::config interpclass]\n"
+}
+
+web::command pi {
+    web::put [web::request PATH_INFO]
+}
+
+web::dispatch
