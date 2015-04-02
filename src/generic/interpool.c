@@ -203,6 +203,7 @@ WebInterp *createWebInterp(websh_server_conf * conf,
     webInterp->lastusedtime = t;
     webInterp->interpClass = webInterpClass;
     webInterp->id = webInterpClass->nextid++;
+    webInterp->originThrdId = Tcl_GetCurrentThread();
 
     /* add to beginning of list of webInterpClass */
     webInterp->next = webInterpClass->first;
@@ -747,7 +748,8 @@ void cleanupPool(websh_server_conf * conf)
 		expiredInterp = webInterp;
 		webInterp = webInterp->next;
 
-		if (expiredInterp->state == WIP_EXPIRED)
+                // TODO: possible to leak memory after check 'originThrdId'?
+		if (expiredInterp->state == WIP_EXPIRED && expiredInterp->originThrdId == Tcl_GetCurrentThread())
 		    destroyWebInterp(expiredInterp);
 	    }
 	    entry = Tcl_NextHashEntry(&search);

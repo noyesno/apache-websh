@@ -64,6 +64,7 @@ typedef struct WebInterp
     struct WebInterp *next;
     struct WebInterp *prev;
 
+    Tcl_ThreadId originThrdId;	/* Origin thread where this token was created */
 }
 WebInterp;
 
