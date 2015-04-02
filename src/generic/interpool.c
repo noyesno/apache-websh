@@ -193,14 +193,17 @@ WebInterp *createWebInterp(websh_server_conf * conf,
 
     Tcl_ResetResult(webInterp->interp);
 
+    time_t t;
+    time(&t);
+
     webInterp->dtor = NULL;
     webInterp->state = WIP_FREE;
     webInterp->numrequests = 0;
-    webInterp->starttime = (long) r->request_time;
-    webInterp->lastusedtime = (long) r->request_time;
+    webInterp->starttime    = t;
+    webInterp->lastusedtime = t;
     webInterp->interpClass = webInterpClass;
     webInterp->id = webInterpClass->nextid++;
-    
+
     /* add to beginning of list of webInterpClass */
     webInterp->next = webInterpClass->first;
     if (webInterp->next != NULL)
@@ -414,12 +417,15 @@ WebInterp *poolGetWebInterp(websh_server_conf * conf, char *filename,
 
 	/* search a free interp */
 	webInterp = webInterpClass->first;
+	time_t t;
+
+	time(&t);
 
 	while (webInterp != NULL) {
 
 	    if ((webInterp->state) == WIP_FREE) {
 		if (webInterpClass->maxidletime
-		    && (r->request_time - webInterp->lastusedtime) >
+		    && (t - webInterp->lastusedtime) >
 		    webInterpClass->maxidletime) {
 		    logToAp(webInterp->interp, NULL,
 			    "interpreter expired: idle time reached (id %ld, claa %s)", webInterp->id, webInterp->interpClass->filename);
@@ -428,7 +434,7 @@ WebInterp *poolGetWebInterp(websh_server_conf * conf, char *filename,
 		}
 		else {
 		    if (webInterpClass->maxttl
-			&& (r->request_time - webInterp->starttime) >
+			&& (t - webInterp->starttime) >
 			webInterpClass->maxttl) {
 			logToAp(webInterp->interp, NULL,
 				"interpreter expired: time to live reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
