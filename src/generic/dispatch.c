@@ -19,10 +19,11 @@
 #include "tcl.h"
 #include "webutl.h"
 
-#define FORM_URLENCODED    "application/x-www-form-urlencoded"
-#define FORM_MULTIPART     "multipart/form-data"
-#define FORM_MULTIPART_LEN 19
-#define FORM_DEFAULT_TYPE  FORM_URLENCODED
+#define FORM_URLENCODED     "application/x-www-form-urlencoded"
+#define FORM_MULTIPART      "multipart/form-data"
+#define FORM_MULTIPART_LEN  19
+#define FORM_URLENCODED_LEN 33
+#define FORM_DEFAULT_TYPE   FORM_URLENCODED
 
 int parsePostData(Tcl_Interp * interp, Tcl_Obj * name,
 		  Tcl_Obj * type, Tcl_Obj * len, RequestData * requestData);
@@ -442,10 +443,12 @@ int parsePostData(Tcl_Interp * interp, Tcl_Obj * name,
 
 /*   printf("DBG parsePostData - content_type: %s\n",content_type); fflush(stdout); */
 
+    /* XXX: Content-Type:application/x-www-form-urlencoded; charset=UTF-8 */
+
     /* --------------------------------------------------------------------------
      * application/x-www-form-urlencoded
      * ----------------------------------------------------------------------- */
-    if (strcmp(content_type, FORM_URLENCODED) == 0) {
+    if (strncmp(content_type, FORM_URLENCODED, FORM_URLENCODED_LEN) == 0) {
 
 	return parseUrlEncodedFormData(requestData, interp,
 				       Tcl_GetString(name), len);
