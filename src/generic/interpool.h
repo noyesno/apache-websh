@@ -97,7 +97,7 @@ WebInterp *createWebInterp(websh_server_conf * conf,
 			   WebInterpClass * wic, char *filename, long mtime,
 			   request_rec *r);
 
-void destroyWebInterp(WebInterp * webInterp);
+void destroyWebInterp(WebInterp * webInterp, int flag);
 
 WebInterpClass *createWebInterpClass(websh_server_conf * conf, char *filename,
 				     long mtime);
