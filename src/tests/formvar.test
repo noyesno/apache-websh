@@ -59,6 +59,16 @@ test formvar-2.2a {get values with content_type} {
     set res [lsort [web::formvar type]]
 } {ez med}
 
+test formvar-2.2b {get values with content_type and charset} {
+
+    set data "type=ez&type=med"
+    web::formvar -unset
+    web::dispatch -cmd "" -querystring "" -postdata \#data end \
+	"application/x-www-form-urlencoded; charset=UTF-8"
+
+    set res [lsort [web::formvar type]]
+} {ez med}
+
 test formvar-2.3 {unset} {
 
     set data "type=ez&lang=EN"
