@@ -213,10 +213,15 @@ int Web_Response(ClientData clientData, Tcl_Interp * interp,
 	"-httpresponse",
 	"-reset",
 	"-resetall",
+	"-channel",
+	"-encoding",
+	"-translation",
 	NULL
     };
     enum params
-    { SENDHEADER, SELECT, BYTESSENT, HTTPRESPONSE, RESET, RESETALL };
+    { SENDHEADER, SELECT, BYTESSENT, HTTPRESPONSE, RESET, RESETALL,
+      OPT_CHANNEL, OPT_ENCODING, OPT_TRANSLATION
+    };
 
     /* --------------------------------------------------------------------------
      * sanity
@@ -332,6 +337,26 @@ int Web_Response(ClientData clientData, Tcl_Interp * interp,
 		    return TCL_OK;
 		    break;
 		}
+	    case OPT_CHANNEL : {
+              Tcl_Channel channel = getChannel(interp, responseObj);
+	      // Tcl_SetObjResult(interp, (Tcl_Obj *)channel);
+              // Return channel object is ok. But return name for be able to print out.
+              Tcl_SetResult(interp, (char *)Tcl_GetChannelName(channel), TCL_STATIC); // TCL_VOLATILE is not necessary;
+              return TCL_OK;
+              break;
+            }
+	    case OPT_ENCODING :
+	    case OPT_TRANSLATION: {
+              Tcl_Channel channel = getChannel(interp, responseObj);
+
+	      const char *name  = Tcl_GetString(objv[1]);
+	      const char *value = Tcl_GetString(objv[2]);
+              Tcl_SetChannelOption(interp, channel, name, value);
+              // E.g. -encoding binary
+              // E.g. -translation binary
+              return TCL_OK;
+              break;
+            }
 	    case SELECT:{
 		    ResponseObj *old = NULL;
 		    char *name = NULL;
