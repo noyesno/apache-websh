@@ -125,7 +125,7 @@ static apr_status_t exit_websh_pool(void *data)
 	(websh_server_conf *) ap_get_module_config(s->module_config,
 						   &websh_module);
     /* cleanup the pool when server is restarted (-HUP) */
-    destroyPool(conf);
+    destroyPoolThread(conf);
     return APR_SUCCESS;
 }
 #endif
@@ -247,7 +247,7 @@ static int run_websh_script(request_rec * r)
 #else /* APACHE2 */
 
     /* ap_log_rerror(APLOG_MARK, APLOG_NOERRNO|APLOG_ERR, 0, r, "mtime of %s: %ld",r->filename,r->finfo.mtime); */
-    webInterp = poolGetWebInterp(conf, r->filename, (long) r->finfo.mtime, r);
+    webInterp = poolGetThreadWebInterp(conf, r->filename, (long) r->finfo.mtime, r);
     /* ap_log_rerror(APLOG_MARK, APLOG_NOERRNO|APLOG_ERR, 0, r, "got pool %p", webInterp); */
     if (webInterp == NULL || webInterp->interp == NULL) {
 	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
@@ -283,6 +283,7 @@ static int run_websh_script(request_rec * r)
 #endif /* APACHE2 */
 	return 0;
     }
+
 
     if (Tcl_Eval(webInterp->interp, "web::ap::perReqInit") != TCL_OK) {
 #ifndef APACHE2
@@ -336,7 +337,7 @@ static int run_websh_script(request_rec * r)
     Tcl_DeleteAssocData(webInterp->interp, WEB_AP_ASSOC_DATA);
     Tcl_DeleteAssocData(webInterp->interp, WEB_INTERP_ASSOC_DATA);
 
-    poolReleaseWebInterp(webInterp);
+    poolReleaseThreadWebInterp(webInterp);
 
     /* ap_kill_timeout(r); */
 

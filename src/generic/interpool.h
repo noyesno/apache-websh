@@ -73,6 +73,8 @@ WebInterp;
 typedef struct WebInterpClass
 {
 
+    Tcl_HashTable *webshPool;
+
     char *filename;
 
     /* death reasons */
@@ -99,7 +101,7 @@ WebInterp *createWebInterp(websh_server_conf * conf,
 
 void destroyWebInterp(WebInterp * webInterp, int flag);
 
-WebInterpClass *createWebInterpClass(websh_server_conf * conf, char *filename,
+WebInterpClass *createWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename,
 				     long mtime);
 
 
@@ -149,5 +151,16 @@ int readWebInterpCode(WebInterp * wi, char *filename);
 
 ApFuncs* createApFuncs();
 void destroyApFuncs(ClientData apFuncs, Tcl_Interp *interp);
+
+/* ----------------------------------------------------------------------------
+ * Thread specific inter pool
+WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
+			    long mtime, request_rec * r)
+ * ------------------------------------------------------------------------- */
+
+WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
+			    long mtime, request_rec * r);
+void poolReleaseThreadWebInterp(WebInterp * webInterp);
+void destroyPoolThread(websh_server_conf * conf);
 
 #endif

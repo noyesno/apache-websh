@@ -1,5 +1,5 @@
 /*
- * modwebsh_ap.c -- web::initializer, web::finalizer
+ nter* modwebsh_ap.c -- web::initializer, web::finalizer
  * nca-073-9
  * 
  * Copyright (c) 1996-2000 by Netcetera AG.
@@ -286,7 +286,13 @@ int Web_InterpClassCfg_AP(ClientData clientData,
     enum params
     { CLASS_TTL, CLASS_IDLETIME, CLASS_REQUESTS };
 
-    websh_server_conf *conf = (websh_server_conf *) clientData;
+    // websh_server_conf *conf = (websh_server_conf *) clientData;
+    // Tcl_HashTable *webshPool = conf->webshPool;
+
+    WebInterp *webInterp = (WebInterp *) clientData;
+    webInterpClass = webInterp->interpClass;
+    websh_server_conf *conf = webInterpClass->conf;
+    Tcl_HashTable *webshPool = webInterpClass->webshPool;
 
     WebAssertObjc(objc < 3 || objc > 4, 1, "id parameter ?value?");
 
@@ -295,7 +301,7 @@ int Web_InterpClassCfg_AP(ClientData clientData,
     Tcl_MutexLock(&(conf->webshPoolLock));
 
     /* see if we have that id */
-    entry = Tcl_FindHashEntry(conf->webshPool, id);
+    entry = Tcl_FindHashEntry(webshPool, id);
     if (entry != NULL) {
 	webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
     }
@@ -305,7 +311,7 @@ int Web_InterpClassCfg_AP(ClientData clientData,
 	int isnew = 0;
 
 	Tcl_Stat(id, &statPtr);
-	webInterpClass = createWebInterpClass(conf, id, statPtr.st_mtime);
+	webInterpClass = createWebInterpClass(conf, webshPool, id, statPtr.st_mtime);
 	entry = Tcl_CreateHashEntry(conf->webshPool, id, &isnew);
 	Tcl_SetHashValue(entry, (ClientData) webInterpClass);
     }
