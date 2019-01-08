@@ -354,6 +354,7 @@ int Web_TempFile(ClientData clientData,
 			argValueOfKey(objc, objv, (char *)params[PATH]),
 			argValueOfKey(objc, objv, (char *)params[PREFIX]));
 
+
     if (tclo == NULL)
 	return TCL_ERROR;
 
@@ -390,7 +391,22 @@ Tcl_Obj *tempFileName(Tcl_Interp * interp, RequestData * requestData,
 #ifdef WIN32
     tmpn = _tempnam(pathstring, prefixstring);
 #else
-    tmpn = tempnam(pathstring, prefixstring);
+    // tmpn = tempnam(pathstring, prefixstring);
+
+    char template[1024];
+    strcat(template, pathstring);
+    strcat(template, "/");
+    strcat(template, prefixstring);
+    strcat(template, "XXXXXX");
+
+    int fd = mkstemp(template);
+    tmpn = template;
+
+    if(0){
+      // FILE *ftmp = tmpfile();
+      // Tcl_Channel *ftmpchan = Tcl_MakeFileChannel( (ClientData)fileno(ftmp),  TCL_READABLE | TCL_WRITABLE);
+      // tmpn = Tcl_GetChannelName(ftmpchan);
+    }
 #endif
 
     if (tmpn == NULL) {
@@ -406,7 +422,7 @@ Tcl_Obj *tempFileName(Tcl_Interp * interp, RequestData * requestData,
     Tcl_IncrRefCount(tclo);
 
 #ifndef WIN32
-    free(tmpn);
+    // free(tmpn);
 #endif
 
     /* now try to add to hash list */

@@ -24,7 +24,7 @@ int modwebsh_createcmd(Tcl_Interp * interp);
 /* ----------------------------------------------------------------------------
  * init --
  * ------------------------------------------------------------------------- */
-int __declspec(dllexport) Websh_Init(Tcl_Interp * interp)
+int Websh_Init(Tcl_Interp * interp)
 {
 
     UrlData *urlData;

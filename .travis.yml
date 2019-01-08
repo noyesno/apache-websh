@@ -14,8 +14,15 @@ cache:
   - apt
   
 script:
- - cd src/unix
- - autoconf
- - ./configure --enable-thread --with-tclinclude=/usr/include/tcl --with-tcl=/usr/lib
- - make
- - make test
+  - cd src/unix
+  - autoconf
+  - ./configure --enable-threads --with-tclinclude=/usr/include/tcl ; # --with-tcl=/usr/lib
+  - ls -lrt
+  - make
+  - ls -lrt
+  - gcc -o websh3.7.0 tclAppInit.o -L. -lwebsh3.7.0 -L/usr/lib/x86_64-linux-gnu -ltcl8.6 -L/usr/lib/x86_64-linux-gnu -ltclstub8.6 -ldl -lz  -lpthread -lieee -lm -Wl,-Bsymbolic-functions -Wl,-z,relro -Wl,--export-dynamic
+  - gcc -o websh3.6.0b5 tclAppInit.o ./libwebsh3.7.0.so -L/usr/lib/x86_64-linux-gnu -ltcl8.6 -L/usr/lib/x86_64-linux-gnu -ltclstub8.6 -ldl -lz  -lpthread -lieee -lm -Wl,-Bsymbolic-functions -Wl,-z,relro -Wl,--export-dynamic
+  - cp ./libwebsh3.7.0.so ./libwebsh3.6.so
+  - gcc -o websh3.7.0 tclAppInit.o ./libwebsh3.7.0.so -L/usr/lib/x86_64-linux-gnu -ltcl8.6 -L/usr/lib/x86_64-linux-gnu -ltclstub8.6 -ldl -lz  -lpthread -lieee -lm -Wl,-Bsymbolic-functions -Wl,-z,relro -Wl,--export-dynamic
+  - gcc -o websh3.7.0 tclAppInit.o -L. -lwebsh3.7 -L/usr/lib/x86_64-linux-gnu -ltcl8.6 -L/usr/lib/x86_64-linux-gnu -ltclstub8.6 -ldl -lz  -lpthread -lieee -lm -Wl,-Bsymbolic-functions -Wl,-z,relro -Wl,--export-dynamic
+  - make test

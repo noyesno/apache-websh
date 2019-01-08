@@ -18,6 +18,7 @@
 #include "webutl.h"
 #include "request.h"
 #include "paramlist.h"
+#include <ctype.h>        // for isspace
 
 #include "mod_websh.h"
 
