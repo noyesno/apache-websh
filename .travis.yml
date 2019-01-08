@@ -9,13 +9,14 @@ addons:
       - tcl-dev
       - apache2-dev
       - apache2
+      - libapr1-dev
 
 cache:
   - apt
-  
+
 script:
- - cd src/unix
- - autoconf
- - ./configure --enable-thread --with-tclinclude=/usr/include/tcl --with-tcl=/usr/lib
- - make
- - make test
+  - cd src/unix
+  - autoconf
+  - ./configure --enable-threads --with-tclinclude=/usr/include/tcl --with-aprinclude=/usr/include/apr-1.0
+  - make
+  - make test

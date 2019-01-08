@@ -24,7 +24,7 @@ int modwebsh_createcmd(Tcl_Interp * interp);
 /* ----------------------------------------------------------------------------
  * init --
  * ------------------------------------------------------------------------- */
-int __declspec(dllexport) Websh_Init(Tcl_Interp * interp)
+int DLL_EXPORT Websh_Init(Tcl_Interp * interp)
 {
 
     UrlData *urlData;
@@ -138,7 +138,7 @@ int __declspec(dllexport) Websh_Init(Tcl_Interp * interp)
  * ModWebsh_Init --
  * Init log Plugin and stubs for mod_websh main interpreter 
  * ------------------------------------------------------------------------- */
-int __declspec(dllexport) ModWebsh_Init(Tcl_Interp * interp)
+int DLL_EXPORT ModWebsh_Init(Tcl_Interp * interp)
 {
 
     if (interp == NULL)
