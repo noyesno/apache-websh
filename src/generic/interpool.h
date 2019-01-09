@@ -137,6 +137,10 @@ void destroyPool(websh_server_conf * conf);
 
 void cleanupPool(websh_server_conf * conf);
 
+WebInterpClass *createWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename,
+				     long mtime);
+
+
 ApFuncs* createApFuncs();
 void destroyApFuncs(ClientData apFuncs, Tcl_Interp *interp);
 

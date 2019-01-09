@@ -82,9 +82,6 @@ static WebInterp *createWebInterp(websh_server_conf * conf,
 
 static void destroyWebInterp(WebInterp * webInterp, int flag);
 
-static WebInterpClass *createWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename,
-				     long mtime);
-
 static int destroyWebInterpClass(WebInterpClass * webInterpClass);
 
 static WebInterpClass *updateWebInterpClass(
@@ -190,6 +187,8 @@ static void initPoolThread(websh_server_conf * conf, request_rec * r)
 
     if(tsdPtr->conf != NULL) return;
 
+    DEBUG_TRACE(conf->server, "initPoolThread");
+
     tsdPtr->conf = conf;
     tsdPtr->mainInterp = createMainInterp(conf);
     HashUtlAllocInit(tsdPtr->webshPool, TCL_STRING_KEYS);
@@ -264,26 +263,32 @@ void poolReleaseThreadWebInterp(WebInterp * webInterp)
 static apr_status_t destroyPoolThread(void *data)
 {
     websh_server_conf *conf = (websh_server_conf *) data;
+
     if (conf == NULL)
         return APR_SUCCESS;
 
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
-    if (tsdPtr->webshPool != NULL) {
-	Tcl_HashEntry *entry;
-	Tcl_HashSearch search;
-
-	// Tcl_MutexLock(&(conf->webshPoolLock));
-	while ((entry = Tcl_FirstHashEntry(tsdPtr->webshPool, &search)) != NULL) {
-	    /* loop through entries */
-	    destroyWebInterpClass((WebInterpClass *) Tcl_GetHashValue(entry));
-	    Tcl_DeleteHashEntry(entry);
-	}
-
-	Tcl_DeleteHashTable(tsdPtr->webshPool);
-	tsdPtr->webshPool = NULL;
-	// Tcl_MutexUnlock(&(conf->webshPoolLock));
+    if( tsdPtr->webshPool==NULL ) {
+        return APR_SUCCESS;
     }
+
+    DEBUG_TRACE(conf->server, "destroyPoolThread");
+
+    Tcl_HashEntry *entry;
+    Tcl_HashSearch search;
+
+    while ((entry = Tcl_FirstHashEntry(tsdPtr->webshPool, &search)) != NULL) {
+	/* loop through entries */
+	destroyWebInterpClass((WebInterpClass *) Tcl_GetHashValue(entry));
+	Tcl_DeleteHashEntry(entry);
+
+        DEBUG_TRACE(conf->server, "thread destroyWebInterpClass ok");
+    }
+
+    Tcl_DeleteHashTable(tsdPtr->webshPool);
+    tsdPtr->webshPool = NULL;
+    DEBUG_TRACE(conf->server, "destroyPoolThread ok");
 
     return APR_SUCCESS;
 }
@@ -292,7 +297,7 @@ static apr_status_t destroyPoolThread(void *data)
 /* ----------------------------------------------------------------------------
  * createWebInterpClass
  * ------------------------------------------------------------------------- */
-static WebInterpClass *createWebInterpClass(
+WebInterpClass *createWebInterpClass(
     websh_server_conf * conf,
     Tcl_HashTable *webshPool,
     char *filename,
@@ -635,6 +640,8 @@ static void destroyWebInterp(WebInterp * webInterp, int flag)
     removeWebInterp(webInterp);
 
     Tcl_Free((char *) webInterp);
+
+    DEBUG_TRACE2(webInterp->interpClass->conf->server, "destroyWebInterp ok");
 
     return;
 }
