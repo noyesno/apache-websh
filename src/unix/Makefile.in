@@ -125,7 +125,7 @@ TCL_STUB_LIB_FILE = @TCL_STUB_LIB_FILE@
 TCL_STUB_LIB_SPEC = @TCL_STUB_LIB_SPEC@
 TCL_LIB_SPEC = @TCL_LIB_SPEC@
 TCLSH_PROG = @TCLSH_PROG@
-TCL_PACKAGE_PATH = @TCL_PACKAGE_PATH@
+TCL_PACKAGE_PATH = ""
 
 # uncomment the following line if you want to enable the
 # Tcl memory and checkmem commands in mod_websh
