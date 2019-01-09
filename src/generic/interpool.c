@@ -46,6 +46,7 @@
 
 typedef struct ThreadSpecificData {
     websh_server_conf *conf;
+    Tcl_Interp        *mainInterp;
     Tcl_HashTable     *webshPool;
 } ThreadSpecificData;
 
@@ -69,13 +70,35 @@ static Tcl_ThreadDataKey dataKey;
 #endif
 
 /* ----------------------------------------------------------------------------
- * reserve/release WebInterp
+ * Declaration
  * ------------------------------------------------------------------------- */
+
+static Tcl_Interp *createMainInterp(websh_server_conf * conf);
+static int initMainInterp(websh_server_conf * conf);
+
+static WebInterp *createWebInterp(websh_server_conf * conf,
+			   WebInterpClass * wic, char *filename, long mtime,
+			   request_rec *r);
+
+static void destroyWebInterp(WebInterp * webInterp, int flag);
+
+static WebInterpClass *createWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename,
+				     long mtime);
+
+static int destroyWebInterpClass(WebInterpClass * webInterpClass);
 
 static WebInterpClass *updateWebInterpClass(
    const char *newfile, const char *oldfile,
    long mtime, WebInterpClass *webInterpClass
 );
+
+static int readWebInterpCode(WebInterp * wi, char *filename);
+// static void deleteInterpClass(WebInterpClass * webInterpClass);
+
+
+/* ----------------------------------------------------------------------------
+ * reserve/release WebInterp
+ * ------------------------------------------------------------------------- */
 
 static void reserveWebInterp(WebInterp *webInterp){
     if ( webInterp==NULL ) return;
@@ -161,21 +184,25 @@ static WebInterp *purgeWebInterpclass(WebInterpClass *webInterpClass)
  * See http://www.tcl.tk/doc/howto/thread_model.html about it.
  * ------------------------------------------------------------------------- */
 
-static void initPoolThread(websh_server_conf * conf)
+static void initPoolThread(websh_server_conf * conf, request_rec * r)
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
     if(tsdPtr->conf != NULL) return;
 
     tsdPtr->conf = conf;
+    tsdPtr->mainInterp = createMainInterp(conf);
     HashUtlAllocInit(tsdPtr->webshPool, TCL_STRING_KEYS);
+
+    apr_thread_t *current_thread = r->connection->current_thread;
+    apr_thread_data_set(conf, "WebInterpThreadPool", destroyPoolThread, current_thread);
 }
 
 WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
 			    long mtime, request_rec * r)
 {
 
-    initPoolThread(conf);
+    initPoolThread(conf, r);
 
     char *id=filename;
 
@@ -234,28 +261,38 @@ void poolReleaseThreadWebInterp(WebInterp * webInterp)
 }
 
 
-void destroyPoolThread(websh_server_conf * conf)
+static apr_status_t destroyPoolThread(void *data)
 {
+    websh_server_conf *conf = (websh_server_conf *) data;
+    if (conf == NULL)
+        return APR_SUCCESS;
+
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
     if (tsdPtr->webshPool != NULL) {
 	Tcl_HashEntry *entry;
 	Tcl_HashSearch search;
 
+	// Tcl_MutexLock(&(conf->webshPoolLock));
 	while ((entry = Tcl_FirstHashEntry(tsdPtr->webshPool, &search)) != NULL) {
 	    /* loop through entries */
 	    destroyWebInterpClass((WebInterpClass *) Tcl_GetHashValue(entry));
 	    Tcl_DeleteHashEntry(entry);
 	}
+
 	Tcl_DeleteHashTable(tsdPtr->webshPool);
 	tsdPtr->webshPool = NULL;
+	// Tcl_MutexUnlock(&(conf->webshPoolLock));
     }
+
+    return APR_SUCCESS;
 }
+
 
 /* ----------------------------------------------------------------------------
  * createWebInterpClass
  * ------------------------------------------------------------------------- */
-WebInterpClass *createWebInterpClass(
+static WebInterpClass *createWebInterpClass(
     websh_server_conf * conf,
     Tcl_HashTable *webshPool,
     char *filename,
@@ -338,7 +375,7 @@ static apr_status_t threadReleasePool(void *data)
     websh_server_conf *conf = (websh_server_conf *) data;
 
     if (conf == NULL)
-	return;
+	return APR_SUCCESS;
 
     DEBUG_TRACE(conf->server, "releaseThreadPool in thread %ld", Tcl_GetCurrentThread());
 
@@ -363,7 +400,7 @@ static apr_status_t threadReleasePool(void *data)
 	Tcl_MutexUnlock(&(conf->webshPoolLock));
     }
 
-    return;
+    return APR_SUCCESS;
 }
 
 
@@ -376,7 +413,7 @@ static apr_status_t hookReleaseThreadPool(websh_server_conf *conf, request_rec *
   return APR_SUCCESS;
 }
 
-WebInterp *createWebInterp(websh_server_conf * conf,
+static WebInterp *createWebInterp(websh_server_conf * conf,
 			   WebInterpClass * webInterpClass, char *filename,
 			   long mtime, request_rec *r)
 {
@@ -526,7 +563,7 @@ WebInterp *createWebInterp(websh_server_conf * conf,
 /* ----------------------------------------------------------------------------
  * destroyWebInterp
  * ------------------------------------------------------------------------- */
-void removeWebInterp(WebInterp * webInterp)
+static void removeWebInterp(WebInterp * webInterp)
 {
     /* --------------------------------------------------------------------------
      * fixup list linkage
@@ -545,7 +582,7 @@ void removeWebInterp(WebInterp * webInterp)
     return;
 }
 
-void destroyWebInterp(WebInterp * webInterp, int flag)
+static void destroyWebInterp(WebInterp * webInterp, int flag)
 {
     request_rec *r;
 
@@ -856,23 +893,6 @@ int initPool(websh_server_conf * conf)
     /* create our table of interp classes */
     HashUtlAllocInit(conf->webshPool, TCL_STRING_KEYS);
 
-
-    /* see if we have a config file to evaluate */
-    if (conf->scriptName != NULL) {
-	if (Tcl_EvalFile(conf->mainInterp, (char *) conf->scriptName) ==
-	    TCL_ERROR) {
-	    errno = 0;
-#ifndef APACHE2
-	    ap_log_printf(conf->server, "%s", Tcl_GetStringResult(conf->mainInterp));
-#else /* APACHE2 */
-	    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0,
-			 conf->server, "%s", Tcl_GetStringResult(conf->mainInterp));
-#endif /* APACHE2 */
-	    return 0;
-	}
-	Tcl_ResetResult(conf->mainInterp);
-    }
-
     /* if we're in threaded mode, spawn a watcher thread
        that runs a possibly defined code and does cleanup, something like:
 
@@ -957,7 +977,29 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     Tcl_CreateObjCommand(mainInterp, "web::interpclasscfg",
 			 Web_InterpClassCfg, (ClientData) conf, NULL);
 
+    initMainInterp(conf);
+
     return mainInterp;
+}
+
+static int initMainInterp(websh_server_conf * conf)
+{
+    /* see if we have a config file to evaluate */
+    if (conf->scriptName != NULL) {
+	if (Tcl_EvalFile(conf->mainInterp, (char *) conf->scriptName) ==
+	    TCL_ERROR) {
+	    errno = 0;
+#ifndef APACHE2
+	    ap_log_printf(conf->server, "%s", Tcl_GetStringResult(conf->mainInterp));
+#else /* APACHE2 */
+	    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0,
+			 conf->server, "%s", Tcl_GetStringResult(conf->mainInterp));
+#endif /* APACHE2 */
+	    return TCL_ERROR;
+	}
+	Tcl_ResetResult(conf->mainInterp);
+    }
+    return TCL_OK;
 }
 
 
@@ -1057,7 +1099,7 @@ void cleanupPool(websh_server_conf * conf)
 /* ----------------------------------------------------------------------------
  * readWebInterpCode
  * ------------------------------------------------------------------------- */
-int readWebInterpCode(WebInterp * webInterp, char *filename)
+static int readWebInterpCode(WebInterp * webInterp, char *filename)
 {
 
     Tcl_Channel chan;

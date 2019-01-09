@@ -95,17 +95,6 @@ typedef struct WebInterpClass
 }
 WebInterpClass;
 
-WebInterp *createWebInterp(websh_server_conf * conf,
-			   WebInterpClass * wic, char *filename, long mtime,
-			   request_rec *r);
-
-void destroyWebInterp(WebInterp * webInterp, int flag);
-
-WebInterpClass *createWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename,
-				     long mtime);
-
-
-
 /* ----------------------------------------------------------------------------
  * External API
  * ------------------------------------------------------------------------- */
@@ -138,16 +127,15 @@ WebInterpClass *createWebInterpClass(websh_server_conf * conf, Tcl_HashTable *we
     - release lock
  */
 
-Tcl_Interp *createMainInterp(websh_server_conf * conf);
+int initPool(websh_server_conf * conf);
 
 WebInterp *poolGetWebInterp(websh_server_conf * conf, char *filename,
 			    long mtime, request_rec * r);
-int initPool(websh_server_conf * conf);
-void destroyPool(websh_server_conf * conf);
-void cleanupPool(websh_server_conf * conf);
 void poolReleaseWebInterp(WebInterp * webInterp);
-void deleteInterpClass(WebInterpClass * webInterpClass);
-int readWebInterpCode(WebInterp * wi, char *filename);
+
+void destroyPool(websh_server_conf * conf);
+
+void cleanupPool(websh_server_conf * conf);
 
 ApFuncs* createApFuncs();
 void destroyApFuncs(ClientData apFuncs, Tcl_Interp *interp);
@@ -161,6 +149,6 @@ WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
 WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
 			    long mtime, request_rec * r);
 void poolReleaseThreadWebInterp(WebInterp * webInterp);
-void destroyPoolThread(websh_server_conf * conf);
+static apr_status_t destroyPoolThread(void *data);
 
 #endif
