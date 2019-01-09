@@ -1,2 +1,1 @@
-package ifneeded websh 3.6.0 [list load [file join \
-	$dir websh3.6.0b5.dll]]
+package ifneeded websh 3.7.0 [list load [file join $dir websh3.7.0.dll]]
