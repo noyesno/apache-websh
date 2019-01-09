@@ -108,28 +108,6 @@ static apr_status_t cleanup_websh_pool(void *conf)
 }
 #endif /* APACHE2 */
 
-#ifndef APACHE2
-static void exit_websh_pool(server_rec * s, APPOOL * p)
-{
-    websh_server_conf *conf =
-	(websh_server_conf *) ap_get_module_config(s->module_config,
-						   &websh_module);
-    /* cleanup the pool when server is restarted (-HUP) */
-    destroyPool(conf);
-}
-#else
-static apr_status_t exit_websh_pool(void *data)
-{
-    server_rec *s = data;
-    websh_server_conf *conf =
-	(websh_server_conf *) ap_get_module_config(s->module_config,
-						   &websh_module);
-    /* cleanup the pool when server is restarted (-HUP) */
-    destroyPoolThread(conf);
-    return APR_SUCCESS;
-}
-#endif
-
 static void *create_websh_config(APPOOL * p, server_rec * s)
 {
 
@@ -150,8 +128,7 @@ static void *create_websh_config(APPOOL * p, server_rec * s)
 #ifndef APACHE2
     ap_register_cleanup(p, (void *) c, cleanup_websh_pool, ap_null_cleanup);
 #else /* APACHE2 */
-    apr_pool_cleanup_register(p, (void *) c, cleanup_websh_pool,
-			      apr_pool_cleanup_null);
+    apr_pool_cleanup_register(p, (void *) c, cleanup_websh_pool, apr_pool_cleanup_null);
 #endif /* APACHE2 */
 
     return c;
@@ -197,7 +174,6 @@ static void websh_init_child(apr_pool_t * p, server_rec * s)
 		     "Could not init interp pool");
 	return;
     }
-    apr_pool_cleanup_register(p, s, exit_websh_pool, exit_websh_pool);
 }
 
 #else /* APACHE2 */
@@ -418,7 +394,7 @@ module MODULE_VAR_EXPORT websh_module = {
     NULL,			/* logger */
     NULL,			/* header parser */
     websh_init_child,		/* child_init */
-    exit_websh_pool,		/* child_exit */
+    NULL,		        /* child_exit */
     NULL			/* post read-request */
 };
 
