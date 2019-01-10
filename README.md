@@ -1,6 +1,8 @@
  Websh Tcl - Use Tcl for Web and Others
  ======================================
  
+ ![](https://travis-ci.com/noyesno/websh-tcl.svg?branch=master)
+ 
  Websh History
  --------------
  
@@ -91,7 +93,7 @@ mod_websh: Websh as Apache Module
 
 Websh applications can run in either CGI mode or through `mod_websh`.
 
-```
+```apache
 LoadModule websh_module /path/to/mod_websh.so
 
 <IfModule websh_module>
@@ -100,7 +102,59 @@ LoadModule websh_module /path/to/mod_websh.so
 </IfModule>
 ```
 
+### Interpreter Reuse
 
+With mod_websh, Tcl interpreter can be reused between each requests.
+
+This feature can give a big boost to web script response time. 
+
+```tcl
+set classid [web::interpclasscfg]
+
+web::interpclasscfg $classid maxrequests 100    ;# handle at most 100 request
+web::interpclasscfg $classid maxttl      600    ;# live at most 600 seconds
+web::interpclasscfg $classid maxidletime 180    ;# idle at most 180 seconds
+```
+
+### Setup and Cleanup
+
+Since the interpreter can be reused, we have the need of setup at the start
+once and cleanup at the end.
+
+```tcl
+#----------------------------------------------------#
+# web::initializer will execute in listed order      #
+#----------------------------------------------------#
+
+web::initializer {
+  web::logdest add user.-debug file -unbuffered /tmp/test.log
+  web::logfilter add *.-debug
+  web::log info "initializing interp"
+}
+
+#----------------------------------------------------#
+# web::finalizer will be executed in reverse order   #
+#----------------------------------------------------#
+
+web::finalizer {    
+    web::log info "start shutting down interp"
+}
+
+web::finalizer {    
+    web::log info "just before shutting down interp"
+}
+
+#----------------------------------------------------#
+# web::command will be dispatched from web::dispatch #
+#----------------------------------------------------#
+
+web::command default {
+  web::put "hello"
+  web::putx /path/to/page.html
+}
+
+web::dispatch
+```
 
 
 
