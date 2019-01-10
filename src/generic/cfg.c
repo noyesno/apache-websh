@@ -167,7 +167,7 @@ int Web_Cfg(ClientData clientData, Tcl_Interp * interp,
     };
 
     int idx1, result;
-    
+
     CfgData *cfgData = NULL;
 
     WebAssertData(interp, clientData, "Web_Cfg", TCL_ERROR);

@@ -43,6 +43,7 @@ typedef int (ResponseHeaderHandler) (Tcl_Interp * interp,
 typedef struct ResponseObj
 {
     int sendHeader;
+    long firstbyte;
     ResponseHeaderHandler *headerHandler;
     long bytesSent;
     Tcl_HashTable *headers;

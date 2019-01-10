@@ -58,6 +58,8 @@ typedef struct WebInterp
     long numrequests;		/* number of current request */
     long starttime;		/* start time (Tcl does not handle time_t */
     long lastusedtime;		/* last used time */
+    long time_request;		/* time when receive request */
+    long time_ready;		/* time when interp is ready */
     long id;                    /* id of the interpreter */
 
     /* we double-link this list so it's easier to remove elements */

@@ -197,10 +197,15 @@ int Web_InterpCfg_AP(ClientData clientData,
 	"numrequests",
 	"starttime",
 	"lastusedtime",
+	"time_request",
+	"time_ready",
 	"retire"
     };
-    enum params
-    { INTERP_REQUESTS, INTERP_START, INTERP_LASTUSED, INTERP_RETIRE };
+    enum params {
+      INTERP_REQUESTS, INTERP_START, INTERP_LASTUSED,
+      INTERP_TIME_REQUEST, INTERP_TIME_READY,
+      INTERP_RETIRE
+    };
 
     WebInterp *webInterp = (WebInterp *) clientData;
 
@@ -247,6 +252,26 @@ int Web_InterpCfg_AP(ClientData clientData,
 		    return TCL_ERROR;
 		}
 	    Tcl_SetObjResult(interp, Tcl_NewLongObj(lastusedtime));
+	    break;
+	}
+    case INTERP_TIME_REQUEST : {
+	    long time_request = webInterp->time_request;
+	    if (objc == 3)
+		if (Tcl_GetLongFromObj
+		    (interp, objv[2], &(webInterp->time_request)) != TCL_OK) {
+		    return TCL_ERROR;
+		}
+	    Tcl_SetObjResult(interp, Tcl_NewLongObj(time_request));
+	    break;
+	}
+    case INTERP_TIME_READY : {
+	    long time_ready = webInterp->time_ready;
+	    if (objc == 3)
+		if (Tcl_GetLongFromObj
+		    (interp, objv[2], &(webInterp->time_ready)) != TCL_OK) {
+		    return TCL_ERROR;
+		}
+	    Tcl_SetObjResult(interp, Tcl_NewLongObj(time_ready));
 	    break;
 	}
     case INTERP_RETIRE:{

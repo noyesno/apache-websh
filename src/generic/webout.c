@@ -208,6 +208,7 @@ int Web_Response(ClientData clientData, Tcl_Interp * interp,
     int res;
 
     static char *params[] = { "-sendheader",
+	"-firstbyte",
 	"-select",
 	"-bytessent",
 	"-httpresponse",
@@ -219,7 +220,7 @@ int Web_Response(ClientData clientData, Tcl_Interp * interp,
 	NULL
     };
     enum params
-    { SENDHEADER, SELECT, BYTESSENT, HTTPRESPONSE, RESET, RESETALL,
+    { SENDHEADER, FIRSTBYTE, SELECT, BYTESSENT, HTTPRESPONSE, RESET, RESETALL,
       OPT_CHANNEL, OPT_ENCODING, OPT_TRANSLATION
     };
 
@@ -392,6 +393,12 @@ int Web_Response(ClientData clientData, Tcl_Interp * interp,
 		WebAssertObjc(objc != 2, 2, NULL);
 		Tcl_SetObjResult(interp,
 				 Tcl_NewLongObj(responseObj->bytesSent));
+		return TCL_OK;
+
+	    case FIRSTBYTE:
+		WebAssertObjc(objc != 2, 2, NULL);
+		Tcl_SetObjResult(interp,
+				 Tcl_NewLongObj(responseObj->firstbyte));
 		return TCL_OK;
 
 	    case HTTPRESPONSE:{

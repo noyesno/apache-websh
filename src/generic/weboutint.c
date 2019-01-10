@@ -174,6 +174,7 @@ ResponseObj __declspec(dllexport) *createResponseObj(Tcl_Interp * interp, char *
 	paramListAdd(hash, key, val);
     }
 
+    responseObj->firstbyte  = 0;
     responseObj->sendHeader = 1;
     responseObj->bytesSent = 0;
     responseObj->headers = hash;
@@ -499,6 +500,9 @@ int putsCmdImpl(Tcl_Interp * interp, ResponseObj * responseObj, Tcl_Obj * str)
     Tcl_IncrRefCount(sendString);
 
     if (responseObj->sendHeader) {
+        Tcl_Time tcltime;
+        Tcl_GetTime(&tcltime);
+        responseObj->firstbyte  = tcltime.sec*1000000 + tcltime.usec;
 	responseObj->headerHandler(interp, responseObj, sendString);
 
     }

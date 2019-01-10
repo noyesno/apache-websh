@@ -207,6 +207,7 @@ static int run_websh_script(request_rec * r)
     websh_server_conf *conf =
 	(websh_server_conf *) ap_get_module_config(r->server->module_config,
 						   &websh_module);
+    long request_time = apr_time_now();
 
     /* checkme: check type of timeout in MP case */
     /* ap_soft_timeout("!!! timeout for run_websh_script expired", r); */
@@ -243,6 +244,9 @@ static int run_websh_script(request_rec * r)
 #endif /* APACHE2 */
 	return 0;
     }
+
+    webInterp->time_request = request_time;
+    webInterp->time_ready   = apr_time_now();
 
     Tcl_SetAssocData(webInterp->interp, WEB_AP_ASSOC_DATA, NULL,
 		     (ClientData) r);
