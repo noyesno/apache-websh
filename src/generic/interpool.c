@@ -47,7 +47,7 @@
 typedef struct ThreadSpecificData {
     websh_server_conf *conf;
     Tcl_Interp        *mainInterp;
-    Tcl_HashTable     *webshPool;
+    WebshPool         *webshPool;
 } ThreadSpecificData;
 
 static Tcl_ThreadDataKey dataKey;
@@ -57,8 +57,9 @@ static Tcl_ThreadDataKey dataKey;
 
 #define MAININTERP_INITCODE "proc web::interpmap {filename} {return $filename}"
 
-#define WIP_CHECK_THREAD 1
-#define WIP_FORCE_REMOVE 2
+#define WIP_CURRENT_THREAD 0
+#define WIP_CHECK_THREAD   1
+#define WIP_FORCE_REMOVE   2
 
 #ifdef DEBUG
   static char debug_trace_message[4096];
@@ -118,6 +119,10 @@ static void releaseWebInterp(WebInterp *webInterp){
 	    	"interpreter expired: request count reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
 	    webInterp->state = WIP_EXPIRED;
 	}
+    }
+
+    if( webInterp->state == WIP_EXPIRED ){
+        destroyWebInterp(webInterp, WIP_CURRENT_THREAD);
     }
 
     return;
@@ -257,6 +262,8 @@ void poolReleaseThreadWebInterp(WebInterp * webInterp)
     WebInterpClass *webInterpClass = webInterp->interpClass;
 
     releaseWebInterp(webInterp);
+
+    cleanupPool(webInterpClass->webshPool);
 }
 
 
@@ -578,6 +585,7 @@ static void removeWebInterp(WebInterp * webInterp)
 	webInterp->prev->next = webInterp->next;
     else
 	webInterp->interpClass->first = webInterp->next;
+
     if (webInterp->next != NULL)
 	/* we are not the last */
 	webInterp->next->prev = webInterp->prev;
@@ -639,9 +647,9 @@ static void destroyWebInterp(WebInterp * webInterp, int flag)
 
     removeWebInterp(webInterp);
 
-    Tcl_Free((char *) webInterp);
-
     DEBUG_TRACE2(webInterp->interpClass->conf->server, "destroyWebInterp ok");
+
+    Tcl_Free((char *) webInterp);
 
     return;
 }
@@ -855,7 +863,7 @@ void poolReleaseWebInterp(WebInterp * webInterp)
 	}
 
 	/* cleanup all EXPIRED interps */
-	cleanupPool(webInterpClass->conf);
+	cleanupPool(webInterpClass->conf->webshPool);
 
 	Tcl_MutexUnlock(&(webInterpClass->conf->webshPoolLock));
 
@@ -1049,54 +1057,66 @@ void destroyPool(websh_server_conf * conf)
 /* -------------------------------------------------------------------------
  * cleanupPool NOTE: pool must be locked by caller
  * ------------------------------------------------------------------------- */
-void cleanupPool(websh_server_conf * conf)
+void cleanupPool(WebshPool *webshPool)
 {
 
-    if (conf->webshPool != NULL) {
-	Tcl_HashEntry *entry;
-	Tcl_HashSearch search;
-	WebInterpClass *webInterpClass;
-	WebInterp *webInterp, *expiredInterp;
-	time_t t;
+    if (webshPool == NULL) return;
 
-	time(&t);
+    Tcl_HashEntry *entry;
+    Tcl_HashSearch search;
+    WebInterpClass *webInterpClass;
+    WebInterp *webInterp, *expiredInterp;
+    time_t t;
 
-	entry = Tcl_FirstHashEntry(conf->webshPool, &search);
-	while (entry != NULL) {
-	    /* loop through entries */
-	    webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
+    time(&t);
 
-	    webInterp = webInterpClass->first;
-	    while (webInterp != NULL) {
-		/* NOTE: check on max requests is done by poolReleaseWebInterp */
-		if ((webInterp->state) == WIP_FREE) {
+    entry = Tcl_FirstHashEntry(webshPool, &search);
+    while (entry != NULL) {
+	/* loop through entries */
+	webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
 
-		    /* check for expiry */
-		    if (webInterpClass->maxidletime
-			&& (t - webInterp->lastusedtime) >
-			webInterpClass->maxidletime) {
+	webInterp = webInterpClass->first;
+	while (webInterp != NULL) {
+	    /* NOTE: check on max requests is done by poolReleaseWebInterp */
+	    if ((webInterp->state) == WIP_FREE) {
+
+		/* check for expiry */
+		if (webInterpClass->maxidletime
+		    && (t - webInterp->lastusedtime) >
+		    webInterpClass->maxidletime) {
+		    logToAp(webInterp->interp, NULL,
+			    "interpreter expired: idle time reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
+		    webInterp->state = WIP_EXPIRED;
+		} else {
+		    if (webInterpClass->maxttl
+			&& (t - webInterp->starttime) >
+			webInterpClass->maxttl) {
 			logToAp(webInterp->interp, NULL,
-				"interpreter expired: idle time reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
+				"interpreter expired: time to live reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
 			webInterp->state = WIP_EXPIRED;
 		    }
-		    else {
-			if (webInterpClass->maxttl
-			    && (t - webInterp->starttime) >
-			    webInterpClass->maxttl) {
-			    logToAp(webInterp->interp, NULL,
-				    "interpreter expired: time to live reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
-			    webInterp->state = WIP_EXPIRED;
-			}
-		    }
 		}
-		expiredInterp = webInterp;
-		webInterp = webInterp->next;
-
-		if (expiredInterp->state == WIP_EXPIRED)
-		    destroyWebInterp(expiredInterp, WIP_CHECK_THREAD);
 	    }
-	    entry = Tcl_NextHashEntry(&search);
+	    expiredInterp = webInterp;
+	    webInterp = webInterp->next;
+
+	    if (expiredInterp->state == WIP_EXPIRED){
+		destroyWebInterp(expiredInterp, WIP_CHECK_THREAD);
+            }
 	}
+
+        // TODO: Need destroy unused WebInterpClass to release resource.
+        //       But destroy it too early is not good for performance - can not reuse it.
+        //       Rely on destroyPool() to do cleanup may be ok.
+        if( 0 && webInterpClass->first == NULL ){
+            destroyWebInterpClass(webInterpClass);
+	    Tcl_DeleteHashEntry(entry);
+            /* XXX: It is inadvisable to modify the structure of the table,
+                    e.g. by creating or deleting entries, while the search is in progress,
+                    with the exception of deleting the entry returned by Tcl_FirstHashEntry or Tcl_NextHashEntry.
+            */
+        }
+	entry = Tcl_NextHashEntry(&search);
     }
 
     return;

@@ -71,6 +71,7 @@ typedef struct WebInterp
 WebInterp;
 
 
+typedef Tcl_HashTable WebshPool;
 
 typedef struct WebInterpClass
 {
@@ -137,7 +138,7 @@ void poolReleaseWebInterp(WebInterp * webInterp);
 
 void destroyPool(websh_server_conf * conf);
 
-void cleanupPool(websh_server_conf * conf);
+void cleanupPool(WebshPool *webshPool);
 
 WebInterpClass *createWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename,
 				     long mtime);
