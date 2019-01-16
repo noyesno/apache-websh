@@ -110,15 +110,17 @@ static void releaseWebInterp(WebInterp *webInterp){
     webInterp->lastusedtime = (long) time(NULL);
     webInterp->numrequests++;
 
-    if (webInterp->state == WIP_EXPIREDINUSE){
-        webInterp->state = WIP_EXPIRED;
-    } else {
-        webInterp->state = WIP_FREE;
-	if (webInterpClass->maxrequests && (webInterp->numrequests >= webInterpClass->maxrequests)) {
-	    logToAp(webInterp->interp, NULL,
-	    	"interpreter expired: request count reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
-	    webInterp->state = WIP_EXPIRED;
-	}
+    switch(webInterp->state){
+        case WIP_EXPIREDINUSE :
+            webInterp->state = WIP_EXPIRED;
+            break;
+        default :
+            webInterp->state = WIP_FREE;
+	    if (webInterpClass->maxrequests && (webInterp->numrequests >= webInterpClass->maxrequests)) {
+	        logToAp(webInterp->interp, NULL,
+	        	"interpreter expired: request count reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
+	        webInterp->state = WIP_EXPIRED;
+	    }
     }
 
     if( webInterp->state == WIP_EXPIRED ){
@@ -143,26 +145,20 @@ static WebInterp *purgeWebInterpclass(WebInterpClass *webInterpClass)
 
 	if ((webInterp->state) == WIP_FREE && webInterp->originThrdId == current_thread) {
             logToAp(webInterp->interp, NULL, "purgeWebInterpclass in current thread");
-	    if (webInterpClass->maxidletime
-		&& (t - webInterp->lastusedtime) >
-		webInterpClass->maxidletime) {
+	    if (webInterpClass->maxidletime && (t - webInterp->lastusedtime) > webInterpClass->maxidletime) {
 		logToAp(webInterp->interp, NULL,
 			"interpreter expired: idle time reached (id %ld, claa %s)", webInterp->id, webInterp->interpClass->filename);
 		webInterp->state = WIP_EXPIRED;
 
-	    } else {
-		if (webInterpClass->maxttl
-		    && (t - webInterp->starttime) >
-		    webInterpClass->maxttl) {
-		    logToAp(webInterp->interp, NULL,
-			    "interpreter expired: time to live reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
-		    webInterp->state = WIP_EXPIRED;
-                    logToAp(webInterp->interp, NULL, "purgeWebInterpclass mark WIP_EXPIRED due to maxttl");
-		} else {
-                    logToAp(webInterp->interp, NULL, "purgeWebInterpclass found");
-		    found = webInterp;
-		    break;
-		}
+	    } else if (webInterpClass->maxttl && (t - webInterp->starttime) > webInterpClass->maxttl) {
+		logToAp(webInterp->interp, NULL,
+		        "interpreter expired: time to live reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
+		webInterp->state = WIP_EXPIRED;
+                logToAp(webInterp->interp, NULL, "purgeWebInterpclass mark WIP_EXPIRED due to maxttl");
+            } else if (webInterp->state == WIP_FREE) {
+                logToAp(webInterp->interp, NULL, "purgeWebInterpclass found free WebInterp");
+	        found = webInterp;
+	        break;
 	    }
 	}
 	webInterp = webInterp->next;
@@ -234,7 +230,7 @@ WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
             return NULL;
         }
 
-        webInterp      = purgeWebInterpclass(webInterpClass);
+        webInterp = purgeWebInterpclass(webInterpClass);
 
         if(webInterp!=NULL){
           // reuse webInterp
@@ -438,6 +434,7 @@ static WebInterp *createWebInterp(websh_server_conf * conf,
     WebInterp *webInterp = (WebInterp *) Tcl_Alloc(sizeof(WebInterp));
 
     webInterp->interp = Tcl_CreateInterp();
+    Tcl_Preserve(webInterp->interp);
 
     DEBUG_TRACE2(conf->server, "createWebInterp %p in thread %ld", webInterp->interp, Tcl_GetCurrentThread());
 
@@ -644,6 +641,7 @@ static void destroyWebInterp(WebInterp * webInterp, int flag)
     }
 
     Tcl_DeleteInterp(webInterp->interp);
+    Tcl_Release(webInterp->interp);
 
     removeWebInterp(webInterp);
 
@@ -929,6 +927,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
 
     LogPlugIn *logtoap = NULL;
     Tcl_Interp *mainInterp = Tcl_CreateInterp();
+    Tcl_Preserve(mainInterp);
     ApFuncs *apFuncs;
 
     if (mainInterp == NULL) {
@@ -939,6 +938,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     if (Tcl_InitStubs(mainInterp,"8.2",0) == NULL) {
       DEBUG_TRACE(conf->server, "Tcl_InitStubs mainInterp fail");
       Tcl_DeleteInterp(mainInterp);
+      Tcl_Release(mainInterp);
       return NULL;
     }
 
@@ -951,6 +951,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     apFuncs = createApFuncs();
     if (apFuncs == NULL) {
         Tcl_DeleteInterp(mainInterp);
+        Tcl_Release(mainInterp);
 	return NULL;
     }
     Tcl_SetAssocData(mainInterp, WEB_APFUNCS_ASSOC_DATA, destroyApFuncs, (ClientData *) apFuncs);
@@ -960,6 +961,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
         DEBUG_TRACE(conf->server, "Tcl_Init mainInterp fail with!");
         DEBUG_TRACE(conf->server, Tcl_GetStringResult(mainInterp));
 	Tcl_DeleteInterp(mainInterp);
+        Tcl_Release(mainInterp);
 	return NULL;
     }
 
@@ -967,6 +969,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     if (ModWebsh_Init(mainInterp) == TCL_ERROR) {
         DEBUG_TRACE(conf->server, "ModWebsh_Init mainInterp fail!");
 	Tcl_DeleteInterp(mainInterp);
+        Tcl_Release(mainInterp);
 	return NULL;
     }
 
@@ -976,6 +979,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     logtoap = createLogPlugIn();
     if (logtoap == NULL) {
 	Tcl_DeleteInterp(mainInterp);
+        Tcl_Release(mainInterp);
 	return NULL;
     }
     logtoap->constructor = createLogToAp;
@@ -986,6 +990,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     /* eval init code */
     if (Tcl_Eval(mainInterp, MAININTERP_INITCODE) == TCL_ERROR) {
 	Tcl_DeleteInterp(mainInterp);
+        Tcl_Release(mainInterp);
 	return NULL;
     }
 
@@ -1048,6 +1053,7 @@ void destroyPool(websh_server_conf * conf)
 	/* now delete the interp */
         DEBUG_TRACE(conf->server, "Tcl_DeleteInterp mainInterp by thread %ld", Tcl_GetCurrentThread());
 	Tcl_DeleteInterp(conf->mainInterp);
+        Tcl_Release(conf->mainInterp);
 	conf->mainInterp = NULL;
     }
 
