@@ -226,102 +226,125 @@ static int run_websh_script(request_rec * r)
     /* ap_log_rerror(APLOG_MARK, APLOG_NOERRNO|APLOG_ERR, 0, r, "mtime of %s: %ld",r->filename,r->finfo.mtime); */
     webInterp = poolGetThreadWebInterp(conf, r->filename, (long) r->finfo.mtime, r);
     /* ap_log_rerror(APLOG_MARK, APLOG_NOERRNO|APLOG_ERR, 0, r, "got pool %p", webInterp); */
-    if (webInterp == NULL || webInterp->interp == NULL) {
+    if (webInterp == NULL){
 	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
 		      "mod_websh - no interp!");
+	return 0;
+    }
+
+    if (webInterp->interp == NULL) {
+	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
+		      "mod_websh - null interp!");
+
+        expireWebInterp(webInterp);
+        poolReleaseThreadWebInterp(webInterp);
 	return 0;
     }
 
 #endif /* APACHE2 */
 
     if (Tcl_InterpDeleted(webInterp->interp)) {
-#ifndef APACHE2
+        #ifndef APACHE2
 	ap_log_printf(r->server,
 		      "mod_websh - hey, somebody is deleting the interp!");
-#else /* APACHE2 */
+        #else /* APACHE2 */
 	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
 		      "mod_websh - hey, somebody is deleting the interp!");
-#endif /* APACHE2 */
+        #endif /* APACHE2 */
+
+        expireWebInterp(webInterp);
+        poolReleaseThreadWebInterp(webInterp);
 	return 0;
     }
 
+    int succ = 0;
     webInterp->time_request = request_time;
     webInterp->time_ready   = apr_time_now();
 
     Tcl_SetAssocData(webInterp->interp, WEB_AP_ASSOC_DATA, NULL,
 		     (ClientData) r);
-
     Tcl_SetAssocData(webInterp->interp, WEB_INTERP_ASSOC_DATA, NULL,
 		     (ClientData) webInterp);
 
-    if (createApchannel(webInterp->interp, r) != TCL_OK) {
-#ifndef APACHE2
-	ap_log_printf(r->server, "mod_websh - cannot create apchannel");
-#else /* APACHE2 */
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-		      "mod_websh - cannot create apchannel");
-#endif /* APACHE2 */
-	return 0;
-    }
+    do {
+	if (createApchannel(webInterp->interp, r) != TCL_OK) {
+	    #ifndef APACHE2
+	    ap_log_printf(r->server, "mod_websh - cannot create apchannel");
+	    #else /* APACHE2 */
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
+			  "mod_websh - cannot create apchannel");
+	    #endif /* APACHE2 */
 
-
-    if (Tcl_Eval(webInterp->interp, "web::ap::perReqInit") != TCL_OK) {
-#ifndef APACHE2
-	ap_log_printf(r->server,
-		      "mod_websh - cannot init per-request Websh code: %s", Tcl_GetStringResult(webInterp->interp));
-#else /* APACHE2 */
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-		      "mod_websh - cannot init per-request Websh code: %s", Tcl_GetStringResult(webInterp->interp));
-#endif /* APACHE2 */
-	return 0;
-    }
-
-    if (webInterp->code != NULL) {
-	int res = 0;
-
-	Tcl_IncrRefCount(webInterp->code);
-	res = Tcl_EvalObjEx(webInterp->interp, webInterp->code, 0);
-	Tcl_DecrRefCount(webInterp->code);
-
-	if (res != TCL_OK) {
-
-	    char *errorInfo = NULL;
-	    errorInfo =
-		(char *) Tcl_GetVar(webInterp->interp, "errorInfo", TCL_GLOBAL_ONLY);
-	    logToAp(webInterp->interp, NULL, errorInfo);
+	    break;
 	}
 
-	Tcl_ResetResult(webInterp->interp);
-    }
+	do {
+	    if (Tcl_Eval(webInterp->interp, "web::ap::perReqInit") != TCL_OK) {
+		#ifndef APACHE2
+		ap_log_printf(r->server,
+			      "mod_websh - cannot init per-request Websh code: %s", Tcl_GetStringResult(webInterp->interp));
+		#else /* APACHE2 */
+		ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
+			      "mod_websh - cannot init per-request Websh code: %s", Tcl_GetStringResult(webInterp->interp));
+		#endif /* APACHE2 */
+		break;
+	    }
 
-    if (Tcl_Eval(webInterp->interp, "web::ap::perReqCleanup") != TCL_OK) {
-#ifndef APACHE2
-	ap_log_printf(r->server, "mod_websh - error while cleaning-up: %s", Tcl_GetStringResult(webInterp->interp));
-#else /* APACHE2 */
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-		      "mod_websh - error while cleaning-up: %s", Tcl_GetStringResult(webInterp->interp));
-#endif /* APACHE2 */
-	return 0;
-    }
+	    if (webInterp->code != NULL) {
+		int res = 0;
 
-    if (destroyApchannel(webInterp->interp) != TCL_OK) {
-#ifndef APACHE2
-	ap_log_printf(r->server, "mod_websh - error closing ap-channel");
-#else /* APACHE2 */
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-		      "mod_websh - error closing ap-channel");
-#endif /* APACHE2 */
-	return 0;
-    }
+		Tcl_IncrRefCount(webInterp->code);
+		res = Tcl_EvalObjEx(webInterp->interp, webInterp->code, 0);
+		Tcl_DecrRefCount(webInterp->code);
+
+		if (res != TCL_OK) {
+
+		    char *errorInfo = NULL;
+		    errorInfo =
+			(char *) Tcl_GetVar(webInterp->interp, "errorInfo", TCL_GLOBAL_ONLY);
+		    logToAp(webInterp->interp, NULL, errorInfo);
+		}
+
+		Tcl_ResetResult(webInterp->interp);
+	    }
+
+	    if (Tcl_Eval(webInterp->interp, "web::ap::perReqCleanup") != TCL_OK) {
+		#ifndef APACHE2
+		ap_log_printf(r->server, "mod_websh - error while cleaning-up: %s", Tcl_GetStringResult(webInterp->interp));
+		#else /* APACHE2 */
+		ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
+			      "mod_websh - error while cleaning-up: %s", Tcl_GetStringResult(webInterp->interp));
+		#endif /* APACHE2 */
+		break;
+	    }
+
+	    succ = 1;
+	} while(0);
+
+	// Free Resource
+	if (destroyApchannel(webInterp->interp) != TCL_OK) {
+	    #ifndef APACHE2
+	    ap_log_printf(r->server, "mod_websh - error closing ap-channel");
+	    #else /* APACHE2 */
+	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
+			  "mod_websh - error closing ap-channel");
+	    #endif /* APACHE2 */
+	    succ = 0;
+	}
+    }while(0);
 
     Tcl_DeleteAssocData(webInterp->interp, WEB_AP_ASSOC_DATA);
     Tcl_DeleteAssocData(webInterp->interp, WEB_INTERP_ASSOC_DATA);
+
+    if(!succ){
+      expireWebInterp(webInterp);
+    }
 
     poolReleaseThreadWebInterp(webInterp);
 
     /* ap_kill_timeout(r); */
 
-    return 1;
+    return succ;
 }
 
 /* ----------------------------------------------------------------------------

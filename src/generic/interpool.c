@@ -111,15 +111,17 @@ static void releaseWebInterp(WebInterp *webInterp){
     webInterp->numrequests++;
 
     switch(webInterp->state){
-        case WIP_EXPIREDINUSE :
-            webInterp->state = WIP_EXPIRED;
+	case WIP_EXPIRED:
             break;
-        default :
-            webInterp->state = WIP_FREE;
+	case WIP_EXPIREDINUSE :
+	    webInterp->state = WIP_EXPIRED;
+	    break;
+	default :
+	    webInterp->state = WIP_FREE;
 	    if (webInterpClass->maxrequests && (webInterp->numrequests >= webInterpClass->maxrequests)) {
-	        logToAp(webInterp->interp, NULL,
-	        	"interpreter expired: request count reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
-	        webInterp->state = WIP_EXPIRED;
+		logToAp(webInterp->interp, NULL,
+			"interpreter expired: request count reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
+		webInterp->state = WIP_EXPIRED;
 	    }
     }
 

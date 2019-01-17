@@ -158,4 +158,8 @@ WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
 void poolReleaseThreadWebInterp(WebInterp * webInterp);
 static apr_status_t destroyPoolThread(void *data);
 
+static inline void expireWebInterp(WebInterp * webInterp){
+  webInterp->state = WIP_EXPIRED;
+}
+
 #endif
