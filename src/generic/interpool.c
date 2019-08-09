@@ -65,9 +65,23 @@ static Tcl_ThreadDataKey dataKey;
   static char debug_trace_message[4096];
   #define DEBUG_TRACE(server, ...)  ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, server, __VA_ARGS__);
   #define DEBUG_TRACE2(server, ...) sprintf(debug_trace_message, __VA_ARGS__); ap_log_error(APLOG_MARK, APLOG_NOTICE, 0, server, debug_trace_message);
+
+  #ifndef APACHE2
+    #define AP_LOG_DEBUG(server, ...) ap_log_printf(server, __VA_ARGS__);
+  #else /* APACHE2 */
+    #define AP_LOG_DEBUG(server, ...) ap_log_error(APLOG_MARK, APLOG_ERR, 0, server, __VA_ARGS__);
+  #endif
 #else
   #define DEBUG_TRACE(server, ...)
   #define DEBUG_TRACE2(server, ...)
+  #define AP_LOG_DEBUG(server, ...)
+#endif
+
+
+#ifndef APACHE2
+  #define AP_LOG_ERROR(server, ...) ap_log_printf(server, __VA_ARGS__);
+#else /* APACHE2 */
+  #define AP_LOG_ERROR(server, ...) ap_log_error(APLOG_MARK, APLOG_ERR, 0, server, __VA_ARGS__);
 #endif
 
 /* ----------------------------------------------------------------------------
@@ -77,18 +91,17 @@ static Tcl_ThreadDataKey dataKey;
 static Tcl_Interp *createMainInterp(websh_server_conf * conf);
 static int initMainInterp(websh_server_conf * conf);
 
-static WebInterp *createWebInterp(websh_server_conf * conf,
-			   WebInterpClass * wic, char *filename, long mtime,
-			   request_rec *r);
+static WebInterp *poolCreateWebInterp(websh_server_conf * conf, WebInterpClass * webInterpClass, char *filename, long mtime, request_rec *r);
+static void       poolDestroyWebInterp(WebInterp * webInterp, int flag);
 
-static void destroyWebInterp(WebInterp * webInterp, int flag);
-
-static int destroyWebInterpClass(WebInterpClass * webInterpClass);
+// static WebInterpClass *poolCreateWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename, long mtime);
+static int             poolDestroyWebInterpClass(WebInterpClass * webInterpClass);
 
 static WebInterpClass *updateWebInterpClass(
    const char *newfile, const char *oldfile,
    long mtime, WebInterpClass *webInterpClass
 );
+
 
 static int readWebInterpCode(WebInterp * wi, char *filename);
 // static void deleteInterpClass(WebInterpClass * webInterpClass);
@@ -116,37 +129,54 @@ static void releaseWebInterp(WebInterp *webInterp){
 	case WIP_EXPIREDINUSE :
 	    webInterp->state = WIP_EXPIRED;
 	    break;
-	default :
+	case WIP_INUSE:
 	    webInterp->state = WIP_FREE;
+            AP_LOG_DEBUG(webInterp->req->server, "release interpreter to WIP_FREE %% id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
 	    if (webInterpClass->maxrequests && (webInterp->numrequests >= webInterpClass->maxrequests)) {
 		logToAp(webInterp->interp, NULL,
 			"interpreter expired: request count reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
 		webInterp->state = WIP_EXPIRED;
 	    }
+            break;
+	default :
+	    AP_LOG_ERROR(webInterp->req->server,
+		     "unexpected interpreter state when release id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
     }
 
     if( webInterp->state == WIP_EXPIRED ){
-        destroyWebInterp(webInterp, WIP_CURRENT_THREAD);
+        poolDestroyWebInterp(webInterp, WIP_CURRENT_THREAD);
     }
 
     return;
 }
 
 
-static WebInterp *purgeWebInterpclass(WebInterpClass *webInterpClass)
+
+/*
+*  WIP_FREE -> WIP_INUSE -> WIP_FREE -> WIP_EXPIRED
+*                        -> WIP_EXPIREDINUSE
+*/
+static WebInterp *poolGetFreeWebInterp(WebInterpClass *webInterpClass)
 {
-    WebInterp *found = NULL;
-
     /* search a free interp */
-    WebInterp *webInterp = webInterpClass->first;
 
-    time_t t; time(&t);
+    if( webInterpClass->first == NULL) {
+      return NULL;
+    }
 
-    Tcl_ThreadId current_thread = Tcl_GetCurrentThread();
-    while (webInterp != NULL) {
+    WebInterp *found = NULL;
+    Tcl_ThreadId current_thread;
+    time_t t;
 
-	if ((webInterp->state) == WIP_FREE && webInterp->originThrdId == current_thread) {
-            logToAp(webInterp->interp, NULL, "purgeWebInterpclass in current thread");
+    time(&t);
+    current_thread = Tcl_GetCurrentThread();
+
+    WebInterp *webInterp;
+    for(webInterp = webInterpClass->first; webInterp != NULL; webInterp = webInterp->next) {
+	if (webInterp->originThrdId != current_thread) continue;  // check thread owner
+
+	if (webInterp->state == WIP_FREE) {
+            logToAp(webInterp->interp, NULL, "poolGetFreeWebInterp in current thread");
 	    if (webInterpClass->maxidletime && (t - webInterp->lastusedtime) > webInterpClass->maxidletime) {
 		logToAp(webInterp->interp, NULL,
 			"interpreter expired: idle time reached (id %ld, claa %s)", webInterp->id, webInterp->interpClass->filename);
@@ -156,14 +186,13 @@ static WebInterp *purgeWebInterpclass(WebInterpClass *webInterpClass)
 		logToAp(webInterp->interp, NULL,
 		        "interpreter expired: time to live reached (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
 		webInterp->state = WIP_EXPIRED;
-                logToAp(webInterp->interp, NULL, "purgeWebInterpclass mark WIP_EXPIRED due to maxttl");
-            } else if (webInterp->state == WIP_FREE) {
-                logToAp(webInterp->interp, NULL, "purgeWebInterpclass found free WebInterp");
+                logToAp(webInterp->interp, NULL, "poolGetFreeWebInterp mark WIP_EXPIRED due to maxttl");
+            } else {
+                logToAp(webInterp->interp, NULL, "poolGetFreeWebInterp found free WebInterp");
 	        found = webInterp;
 	        break;
 	    }
 	}
-	webInterp = webInterp->next;
     }
 
     return found;
@@ -184,7 +213,7 @@ static WebInterp *purgeWebInterpclass(WebInterpClass *webInterpClass)
  * See http://www.tcl.tk/doc/howto/thread_model.html about it.
  * ------------------------------------------------------------------------- */
 
-static void initPoolThread(websh_server_conf * conf, request_rec * r)
+static void initPoolThread(websh_server_conf * conf, apr_thread_t *current_thread)
 {
     ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
 
@@ -196,74 +225,8 @@ static void initPoolThread(websh_server_conf * conf, request_rec * r)
     tsdPtr->mainInterp = createMainInterp(conf);
     HashUtlAllocInit(tsdPtr->webshPool, TCL_STRING_KEYS);
 
-    apr_thread_t *current_thread = r->connection->current_thread;
     apr_thread_data_set(conf, "WebInterpThreadPool", destroyPoolThread, current_thread);
 }
-
-WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
-			    long mtime, request_rec * r)
-{
-
-    initPoolThread(conf, r);
-
-    char *id=filename;
-
-    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
-    Tcl_HashEntry *entry = Tcl_FindHashEntry(tsdPtr->webshPool, id);
-
-    WebInterpClass *webInterpClass;
-    WebInterp      *webInterp = NULL;
-
-    if ( entry!=NULL ) {
-	webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
-
-	/* check if mtime is ok */
-        webInterpClass = updateWebInterpClass(id, filename, mtime, webInterpClass);
-
-        if( webInterpClass==NULL ){
-            #ifndef APACHE2
-	    ap_log_printf(r->server,
-			  "cannot access or stat webInterpClass file '%s'", id);
-            #else /* APACHE2 */
-	    ap_log_error(APLOG_MARK, APLOG_ERR, 0, r->server,
-			 "cannot access or stat webInterpClass file '%s'", id);
-            #endif /* APACHE2 */
-
-            return NULL;
-        }
-
-        webInterp = purgeWebInterpclass(webInterpClass);
-
-        if(webInterp!=NULL){
-          // reuse webInterp
-        }
-    } else {
-	webInterpClass = createWebInterpClass(conf, tsdPtr->webshPool, id, mtime);
-
-        if( webInterpClass==NULL ){
-          return NULL;
-        }
-    }
-
-
-    if( webInterp==NULL ) {
-	webInterp = createWebInterp(conf, webInterpClass, id, mtime, r);
-    }
-
-    reserveWebInterp(webInterp);
-
-    return webInterp;
-}
-
-void poolReleaseThreadWebInterp(WebInterp * webInterp)
-{
-    WebInterpClass *webInterpClass = webInterp->interpClass;
-
-    releaseWebInterp(webInterp);
-
-    cleanupPool(webInterpClass->webshPool);
-}
-
 
 static apr_status_t destroyPoolThread(void *data)
 {
@@ -285,10 +248,10 @@ static apr_status_t destroyPoolThread(void *data)
 
     while ((entry = Tcl_FirstHashEntry(tsdPtr->webshPool, &search)) != NULL) {
 	/* loop through entries */
-	destroyWebInterpClass((WebInterpClass *) Tcl_GetHashValue(entry));
+	poolDestroyWebInterpClass((WebInterpClass *) Tcl_GetHashValue(entry));
 	Tcl_DeleteHashEntry(entry);
 
-        DEBUG_TRACE(conf->server, "thread destroyWebInterpClass ok");
+        DEBUG_TRACE(conf->server, "thread poolDestroyWebInterpClass ok");
     }
 
     Tcl_DeleteHashTable(tsdPtr->webshPool);
@@ -298,21 +261,95 @@ static apr_status_t destroyPoolThread(void *data)
     return APR_SUCCESS;
 }
 
+WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
+			    long mtime, request_rec * r)
+{
+
+    initPoolThread(conf, r->connection->current_thread);
+
+    ThreadSpecificData *tsdPtr = TCL_TSD_INIT(&dataKey);
+
+    WebInterpClass *webInterpClass;
+    WebInterp      *webInterp = NULL;
+
+    webInterpClass = poolCreateWebInterpClass(conf, tsdPtr->webshPool, filename, mtime);
+
+    if(webInterpClass!=NULL && webInterpClass->first!=NULL){
+	/* check if mtime is ok */
+        char *id=filename;
+        webInterpClass = updateWebInterpClass(id, filename, mtime, webInterpClass);
+    }
+
+    if(webInterpClass==NULL){
+       #ifndef APACHE2
+       ap_log_printf(r->server,
+           	  "cannot access or stat webInterpClass file '%s'", filename);
+       #else /* APACHE2 */
+       ap_log_error(APLOG_MARK, APLOG_ERR, 0, r->server,
+           	 "cannot access or stat webInterpClass file '%s'", filename);
+       #endif /* APACHE2 */
+
+       return NULL;
+    }
+
+
+    webInterp = poolGetFreeWebInterp(webInterpClass);
+
+    if( webInterp==NULL ) {
+	webInterp = poolCreateWebInterp(conf, webInterpClass, filename, mtime, r);
+    }
+
+    if (webInterp->state != WIP_FREE) {
+      AP_LOG_DEBUG(r->server, "unexpected interpreter state != WIP_FREE %% id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
+    } else {
+      AP_LOG_DEBUG(r->server, "reserve interpreter %% id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
+    }
+
+
+    webInterp->req = r;
+    reserveWebInterp(webInterp);
+
+    return webInterp;
+}
+
+void poolReleaseThreadWebInterp(WebInterp * webInterp)
+{
+    WebInterpClass *webInterpClass = webInterp->interpClass;
+
+    releaseWebInterp(webInterp);
+
+    cleanupPool(webInterpClass->webshPool);
+}
 
 /* ----------------------------------------------------------------------------
- * createWebInterpClass
+ * poolCreateWebInterpClass
  * ------------------------------------------------------------------------- */
-WebInterpClass *createWebInterpClass(
+WebInterpClass *poolCreateWebInterpClass(
     websh_server_conf * conf,
     Tcl_HashTable *webshPool,
     char *filename,
     long mtime
 )
 {
+    WebInterpClass *webInterpClass = NULL;
 
-    WebInterpClass *webInterpClass = WebAllocInternalData(WebInterpClass);
+    Tcl_HashEntry *entry;
+
+    entry = Tcl_FindHashEntry(webshPool, filename);
+    if (entry != NULL) {
+	webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
+        return webInterpClass;
+    }
+
+    webInterpClass = WebAllocInternalData(WebInterpClass);
 
     if (webInterpClass != NULL) {
+
+        if (mtime<=0) {
+	  struct stat statPtr;
+	  Tcl_Stat(filename, &statPtr);
+          mtime = statPtr.st_mtime;
+        }
 
 	webInterpClass->webshPool = webshPool;
 	webInterpClass->conf = conf;
@@ -353,16 +390,16 @@ WebInterpClass *createWebInterpClass(
 }
 
 /* ----------------------------------------------------------------------------
- * destroyWebInterpClass
+ * poolDestroyWebInterpClass
  * ------------------------------------------------------------------------- */
-int destroyWebInterpClass(WebInterpClass * webInterpClass)
+int poolDestroyWebInterpClass(WebInterpClass * webInterpClass)
 {
 
     if (webInterpClass == NULL)
 	return TCL_ERROR;
 
     while ((webInterpClass->first) != NULL) {
-	destroyWebInterp(webInterpClass->first, WIP_FORCE_REMOVE);
+	poolDestroyWebInterp(webInterpClass->first, WIP_FORCE_REMOVE);
     }
 
     if (webInterpClass->code != NULL) {
@@ -375,10 +412,6 @@ int destroyWebInterpClass(WebInterpClass * webInterpClass)
     return TCL_OK;
 }
 
-
-/* ----------------------------------------------------------------------------
- * createWebInterp
- * ------------------------------------------------------------------------- */
 
 static apr_status_t threadReleasePool(void *data)
 {
@@ -401,7 +434,7 @@ static apr_status_t threadReleasePool(void *data)
             WebInterp *webInterp = webInterpClass->first;
             while(webInterp != NULL) {
                 WebInterp *nextWebInterp = webInterp->next;
-                destroyWebInterp(webInterp, WIP_CHECK_THREAD);
+                poolDestroyWebInterp(webInterp, WIP_CHECK_THREAD);
                 webInterp = nextWebInterp;
             }
 
@@ -423,7 +456,11 @@ static apr_status_t hookReleaseThreadPool(websh_server_conf *conf, request_rec *
   return APR_SUCCESS;
 }
 
-static WebInterp *createWebInterp(websh_server_conf * conf,
+/* ----------------------------------------------------------------------------
+ * poolCreateWebInterp
+ * ------------------------------------------------------------------------- */
+
+static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
 			   WebInterpClass * webInterpClass, char *filename,
 			   long mtime, request_rec *r)
 {
@@ -543,8 +580,7 @@ static WebInterp *createWebInterp(websh_server_conf * conf,
 	/* copy code from class */
 	webInterp->code = Tcl_DuplicateObj(webInterpClass->code);
 	Tcl_IncrRefCount(webInterp->code);
-    }
-    else {
+    } else {
 	/* load the code into the object */
 	if (readWebInterpCode(webInterp, filename) == TCL_OK) {
 	    /* copy code to class */
@@ -572,7 +608,7 @@ static WebInterp *createWebInterp(websh_server_conf * conf,
 }
 
 /* ----------------------------------------------------------------------------
- * destroyWebInterp
+ * poolDestroyWebInterp
  * ------------------------------------------------------------------------- */
 static void removeWebInterp(WebInterp * webInterp)
 {
@@ -594,19 +630,19 @@ static void removeWebInterp(WebInterp * webInterp)
     return;
 }
 
-static void destroyWebInterp(WebInterp * webInterp, int flag)
+static void poolDestroyWebInterp(WebInterp * webInterp, int flag)
 {
     request_rec *r;
 
     if (webInterp->originThrdId != Tcl_GetCurrentThread()) {
-      DEBUG_TRACE2(webInterp->interpClass->conf->server, "skip destroyWebInterp %p", webInterp->interp);
+      DEBUG_TRACE2(webInterp->interpClass->conf->server, "skip poolDestroyWebInterp %p", webInterp->interp);
       if( flag == WIP_FORCE_REMOVE ) {
         removeWebInterp(webInterp);
       }
       return;
     }
 
-    DEBUG_TRACE2(webInterp->interpClass->conf->server, "destroyWebInterp %p", webInterp->interp);
+    DEBUG_TRACE2(webInterp->interpClass->conf->server, "poolDestroyWebInterp %p", webInterp->interp);
 
     if (webInterp->dtor != NULL) {
 
@@ -647,7 +683,7 @@ static void destroyWebInterp(WebInterp * webInterp, int flag)
 
     removeWebInterp(webInterp);
 
-    DEBUG_TRACE2(webInterp->interpClass->conf->server, "destroyWebInterp ok");
+    DEBUG_TRACE2(webInterp->interpClass->conf->server, "poolDestroyWebInterp ok");
 
     Tcl_Free((char *) webInterp);
 
@@ -700,8 +736,8 @@ static WebInterpClass *updateWebInterpClass(
 
     if (mtime > webInterpClass->mtime) {
         /* invalidate all interpreters, code must be loaded from scratch */
-        WebInterp *webInterp = webInterpClass->first;
-        while (webInterp != NULL) {
+        WebInterp *webInterp;
+        for(webInterp = webInterpClass->first ; webInterp!= NULL ; webInterp = webInterp->next) {
 
 	    logToAp(webInterp->interp, NULL,
 		    "interpreter expired: source changed (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
@@ -710,7 +746,6 @@ static WebInterpClass *updateWebInterpClass(
 	    }else{
 		webInterp->state = WIP_EXPIRED;
 	    }
-	    webInterp = webInterp->next;
         }
         /* free code (will be loaded on demand) */
         if (webInterpClass->code) {
@@ -797,13 +832,13 @@ WebInterp *poolGetWebInterp(websh_server_conf * conf, char *filename,
             return NULL;
         }
 
-        webInterp = purgeWebInterpclass(webInterpClass);
+        webInterp = poolGetFreeWebInterp(webInterpClass);
         found = webInterp;
     } else {
 
 	/* no, we have to create this new interpreter class */
 
-	webInterpClass = createWebInterpClass(conf, conf->webshPool, id, mtime);
+	webInterpClass = poolCreateWebInterpClass(conf, conf->webshPool, id, mtime);
 
 	if (webInterpClass == NULL) {
 	    Tcl_MutexUnlock(&(conf->webshPoolLock));
@@ -814,7 +849,7 @@ WebInterp *poolGetWebInterp(websh_server_conf * conf, char *filename,
 
     if (found == NULL) {
 	/* we have to create one */
-	found = createWebInterp(conf, webInterpClass, id, mtime, r);
+	found = poolCreateWebInterp(conf, webInterpClass, id, mtime, r);
     }
 
     DEBUG_TRACE2(conf->server, "poolGetWebInterp %p in thread %ld", found, Tcl_GetCurrentThread());
@@ -1043,7 +1078,7 @@ void destroyPool(websh_server_conf * conf)
 	Tcl_MutexLock(&(conf->webshPoolLock));
 	while ((entry = Tcl_FirstHashEntry(conf->webshPool, &search)) != NULL) {
 	    /* loop through entries */
-	    destroyWebInterpClass((WebInterpClass *) Tcl_GetHashValue(entry));
+	    poolDestroyWebInterpClass((WebInterpClass *) Tcl_GetHashValue(entry));
 	    Tcl_DeleteHashEntry(entry);
 	}
 	Tcl_DeleteHashTable(conf->webshPool);
@@ -1109,7 +1144,7 @@ void cleanupPool(WebshPool *webshPool)
 	    webInterp = webInterp->next;
 
 	    if (expiredInterp->state == WIP_EXPIRED){
-		destroyWebInterp(expiredInterp, WIP_CHECK_THREAD);
+		poolDestroyWebInterp(expiredInterp, WIP_CHECK_THREAD);
             }
 	}
 
@@ -1117,7 +1152,7 @@ void cleanupPool(WebshPool *webshPool)
         //       But destroy it too early is not good for performance - can not reuse it.
         //       Rely on destroyPool() to do cleanup may be ok.
         if( 0 && webInterpClass->first == NULL ){
-            destroyWebInterpClass(webInterpClass);
+            poolDestroyWebInterpClass(webInterpClass);
 	    Tcl_DeleteHashEntry(entry);
             /* XXX: It is inadvisable to modify the structure of the table,
                     e.g. by creating or deleting entries, while the search is in progress,

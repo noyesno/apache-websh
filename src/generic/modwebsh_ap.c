@@ -325,21 +325,12 @@ int Web_InterpClassCfg_AP(ClientData clientData,
 
     Tcl_MutexLock(&(conf->webshPoolLock));
 
-    /* see if we have that id */
-    entry = Tcl_FindHashEntry(webshPool, id);
-    if (entry != NULL) {
-	webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
+    webInterpClass = poolCreateWebInterpClass(conf, webshPool, id, 0);
+
+    if(webInterpClass == NULL){
+      // TODO: return error
     }
 
-    if (webInterpClass == NULL) {
-	struct stat statPtr;
-	int isnew = 0;
-
-	Tcl_Stat(id, &statPtr);
-	webInterpClass = createWebInterpClass(conf, webshPool, id, statPtr.st_mtime);
-	entry = Tcl_CreateHashEntry(conf->webshPool, id, &isnew);
-	Tcl_SetHashValue(entry, (ClientData) webInterpClass);
-    }
 
     if (Tcl_GetIndexFromObj(interp, objv[2], classParams, "parameter", 0,
 			    &index) != TCL_OK) {

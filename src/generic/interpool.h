@@ -44,6 +44,8 @@ struct WebInterpClass;
 typedef struct WebInterp
 {
 
+    request_rec *req;           /* request connection */
+
     Tcl_Interp *interp;		/* the interp */
     WebInterpState state;	/* its state */
 
@@ -132,6 +134,8 @@ WebInterpClass;
 
 int initPool(websh_server_conf * conf);
 
+WebInterpClass *poolCreateWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename, long mtime);
+
 WebInterp *poolGetWebInterp(websh_server_conf * conf, char *filename,
 			    long mtime, request_rec * r);
 void poolReleaseWebInterp(WebInterp * webInterp);
@@ -139,10 +143,6 @@ void poolReleaseWebInterp(WebInterp * webInterp);
 void destroyPool(websh_server_conf * conf);
 
 void cleanupPool(WebshPool *webshPool);
-
-WebInterpClass *createWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename,
-				     long mtime);
-
 
 ApFuncs* createApFuncs();
 void destroyApFuncs(ClientData apFuncs, Tcl_Interp *interp);
