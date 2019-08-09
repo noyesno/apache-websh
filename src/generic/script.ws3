@@ -15,7 +15,20 @@
 #-----------------------------------------------------------------------------
 # namespace init (make sure web:: exists)
 #-----------------------------------------------------------------------------
-namespace eval web {}
+namespace eval web {
+  variable error ""
+}
+
+proc web::error {args} {
+  variable error
+
+  if {[llength $args]==0} {
+    return $error
+  }
+
+  set name [lindex $args 0]
+  return [dict get $error $name]
+}
 
 #-----------------------------------------------------------------------------
 # web::putxfile

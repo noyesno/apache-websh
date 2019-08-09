@@ -308,11 +308,9 @@ int Web_Dispatch(ClientData clientData,
 	 * --------------------------------------------------------------------- */
 	if (cmdName == NULL) {
 	    cmdName = Tcl_NewStringObj(WEB_REQ_DEFAULT, -1);
-	}
-	else if (Tcl_GetCharLength(cmdName) == 0) {
+	} else if (Tcl_GetCharLength(cmdName) == 0) {
 	    cmdName = Tcl_NewStringObj(WEB_REQ_DEFAULT, -1);
-	}
-	else {
+	} else {
 	    cmdName = Tcl_DuplicateObj(cmdName);
 	}
 	cmdNameStr = Tcl_GetString(cmdName);
@@ -390,6 +388,12 @@ int Web_Dispatch(ClientData clientData,
 	    Tcl_DecrRefCount(hook);
 
 	    if (res == TCL_ERROR) {
+
+                Tcl_Obj *options = Tcl_GetReturnOptions(interp, res);
+                Tcl_Obj *errorVar= Tcl_NewStringObj("::web::error", -1);
+                // Tcl_IncrRefCount(options);
+                Tcl_ObjSetVar2(interp, errorVar, NULL, options, TCL_GLOBAL_ONLY | TCL_LEAVE_ERR_MSG); // TCL_GLOBAL_ONLY
+
 
 		LOG_MSG(interp, WRITE_LOG | SET_RESULT | INTERP_ERRORINFO,
 			__FILE__, __LINE__,
