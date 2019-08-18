@@ -34,7 +34,7 @@
 
 typedef enum WebInterpState
 {
-    WIP_INUSE, WIP_FREE, WIP_EXPIRED, WIP_EXPIREDINUSE
+    WIP_INUSE, WIP_FREE, WIP_EXPIRED, WIP_EXPIRED_INUSE
 }
 WebInterpState;
 
@@ -159,7 +159,13 @@ void poolReleaseThreadWebInterp(WebInterp * webInterp);
 static apr_status_t destroyPoolThread(void *data);
 
 static inline void expireWebInterp(WebInterp * webInterp){
-  webInterp->state = WIP_EXPIRED;
+  if (webInterp->state == WIP_INUSE) {
+    webInterp->state = WIP_EXPIRED_INUSE;
+  } else if (webInterp->state == WIP_EXPIRED_INUSE) {
+    /* keep the state */
+  } else {
+    webInterp->state = WIP_EXPIRED;
+  }
 }
 
 #endif

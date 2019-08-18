@@ -80,9 +80,12 @@ static Tcl_ThreadDataKey dataKey;
 
 #ifndef APACHE2
   #define AP_LOG_ERROR(server, ...) ap_log_printf(server, __VA_ARGS__);
+  #define AP_LOG_RERROR(r, ...) ap_log_rerror(APLOG_MARK, APLOG_ERR, r, __VA_ARGS__);
 #else /* APACHE2 */
   #define AP_LOG_ERROR(server, ...) ap_log_error(APLOG_MARK, APLOG_ERR, 0, server, __VA_ARGS__);
+  #define AP_LOG_RERROR(r, ...)     ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r, __VA_ARGS__);
 #endif
+
 
 /* ----------------------------------------------------------------------------
  * Declaration
@@ -126,7 +129,7 @@ static void releaseWebInterp(WebInterp *webInterp){
     switch(webInterp->state){
 	case WIP_EXPIRED:
             break;
-	case WIP_EXPIREDINUSE :
+	case WIP_EXPIRED_INUSE :
 	    webInterp->state = WIP_EXPIRED;
 	    break;
 	case WIP_INUSE:
@@ -154,7 +157,7 @@ static void releaseWebInterp(WebInterp *webInterp){
 
 /*
 *  WIP_FREE -> WIP_INUSE -> WIP_FREE -> WIP_EXPIRED
-*                        -> WIP_EXPIREDINUSE
+*                        -> WIP_EXPIRED_INUSE
 */
 static WebInterp *poolGetFreeWebInterp(WebInterpClass *webInterpClass)
 {
@@ -299,12 +302,30 @@ WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
 	webInterp = poolCreateWebInterp(conf, webInterpClass, filename, mtime, r);
     }
 
-    if (webInterp->state != WIP_FREE) {
-      AP_LOG_DEBUG(r->server, "unexpected interpreter state != WIP_FREE %% id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
-    } else {
-      AP_LOG_DEBUG(r->server, "reserve interpreter %% id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
+    if (webInterp == NULL){
+	AP_LOG_RERROR(r, "mod_websh - no web interp!");
+	return NULL; 
+    } else if (webInterp->state != WIP_FREE) {
+        expireWebInterp(webInterp);
+        AP_LOG_RERROR(r, "unexpected interpreter state != WIP_FREE %% id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
+        return NULL;
+    } else if (webInterp->interp == NULL) {
+        expireWebInterp(webInterp);
+	AP_LOG_RERROR(r, "mod_websh - null interp!");
+        
+	return NULL;
+    } else if (webInterp->code != NULL) {
+        expireWebInterp(webInterp);
+	AP_LOG_RERROR(r, "mod_websh - interp code is null!");
+	return NULL;
+    } else if (Tcl_InterpDeleted(webInterp->interp)) {
+        expireWebInterp(webInterp);
+	AP_LOG_RERROR(r, "mod_websh - hey, somebody is deleting the interp!");
+
+	return NULL;
     }
 
+    AP_LOG_DEBUG(r->server, "reserve interpreter %% id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
 
     webInterp->req = r;
     reserveWebInterp(webInterp);
@@ -742,7 +763,7 @@ static WebInterpClass *updateWebInterpClass(
 	    logToAp(webInterp->interp, NULL,
 		    "interpreter expired: source changed (id %ld, class %s)", webInterp->id, webInterp->interpClass->filename);
 	    if (webInterp->state == WIP_INUSE){
-		webInterp->state = WIP_EXPIREDINUSE;
+		webInterp->state = WIP_EXPIRED_INUSE;
 	    }else{
 		webInterp->state = WIP_EXPIRED;
 	    }
@@ -883,9 +904,11 @@ void poolReleaseWebInterp(WebInterp * webInterp)
         DEBUG_TRACE(webInterpClass->conf->server, "numrequests = %d / %d , state = %d",
                 webInterp->numrequests, webInterpClass->maxrequests, webInterp->state);
 
-	if (webInterp->state == WIP_EXPIREDINUSE)
+	if (webInterp->state == WIP_EXPIRED_INUSE) {
 	    webInterp->state = WIP_EXPIRED;
-	else {
+	} else if (webInterp->state == WIP_EXPIRED) {
+	    /* keep the state */
+	} else {
 	    webInterp->state = WIP_FREE;
 
 	    /* check for num requests */

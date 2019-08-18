@@ -77,7 +77,7 @@
 #include "interpool.h"
 #include "logtoap.h"
 
-#define WEBSHHANDLER "websh"
+#define WEBSH_HANDLER "websh"
 
 #ifndef APACHE2
 module MODULE_VAR_EXPORT websh_module;
@@ -346,7 +346,7 @@ static int websh_handler(request_rec * r)
     int res;
 
 #ifdef APACHE2
-    if (strcmp(r->handler, WEBSHHANDLER))
+    if (!r->handler || strcmp(r->handler, WEBSH_HANDLER))
 	return DECLINED;
 #endif /* APACHE2 */
 
@@ -385,10 +385,22 @@ static int websh_handler(request_rec * r)
     return OK;			/* NOT r->status, even if it has changed. */
 }
 
+static int websh_post_config(apr_pool_t *pconf, apr_pool_t *ptemp,
+                          apr_pool_t *plog, server_rec *s)
+{
+    char buf[255];
+
+    sprintf(buf, "mod_websh/%s", VERSION);
+    ap_add_version_component(pconf, buf);
+
+    return OK;
+}
+
+
 #ifndef APACHE2
 
 static const handler_rec websh_handlers[] = {
-    {WEBSHHANDLER, websh_handler},
+    {WEBSH_HANDLER, websh_handler},
     {NULL}
 };
 
@@ -416,10 +428,14 @@ module MODULE_VAR_EXPORT websh_module = {
 
 #else /* APACHE2 */
 
-static void register_websh_hooks(apr_pool_t *p) {
+static void register_websh_hooks(apr_pool_t *p)
+{
+
     ap_hook_handler(websh_handler, NULL, NULL, APR_HOOK_MIDDLE);
 
     ap_hook_child_init(websh_init_child, NULL, NULL, APR_HOOK_MIDDLE);
+
+    ap_hook_post_config(websh_post_config, NULL, NULL, APR_HOOK_MIDDLE);
 }
 
 module AP_MODULE_DECLARE_DATA websh_module = {

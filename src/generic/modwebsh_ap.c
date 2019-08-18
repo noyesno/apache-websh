@@ -275,14 +275,14 @@ int Web_InterpCfg_AP(ClientData clientData,
 	    break;
 	}
     case INTERP_RETIRE:{
-	    int expire = (webInterp->state == WIP_EXPIREDINUSE);
+	    int expire = (webInterp->state == WIP_EXPIRED_INUSE);
 	    if (objc == 3) {
 		int retire = 0;
 		if (Tcl_GetBooleanFromObj(interp, objv[2], &retire) != TCL_OK) {
 		    return TCL_ERROR;
 		}
 		if (retire)
-		    webInterp->state = WIP_EXPIREDINUSE;
+		    webInterp->state = WIP_EXPIRED_INUSE;
 		else
 		    webInterp->state = WIP_INUSE;
 	    }
