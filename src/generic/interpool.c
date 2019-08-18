@@ -89,7 +89,7 @@ static Tcl_ThreadDataKey dataKey;
  * ------------------------------------------------------------------------- */
 
 static Tcl_Interp *createMainInterp(websh_server_conf * conf);
-static int initMainInterp(websh_server_conf * conf);
+static int initMainInterp(websh_server_conf * conf, Tcl_Interp *mainInterp);
 
 static WebInterp *poolCreateWebInterp(websh_server_conf * conf, WebInterpClass * webInterpClass, char *filename, long mtime, request_rec *r);
 static void       poolDestroyWebInterp(WebInterp * webInterp, int flag);
@@ -1034,27 +1034,21 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     Tcl_CreateObjCommand(mainInterp, "web::interpclasscfg",
 			 Web_InterpClassCfg, (ClientData) conf, NULL);
 
-    initMainInterp(conf);
+    initMainInterp(conf, mainInterp);
 
     return mainInterp;
 }
 
-static int initMainInterp(websh_server_conf * conf)
+static int initMainInterp(websh_server_conf * conf, Tcl_Interp *mainInterp)
 {
     /* see if we have a config file to evaluate */
     if (conf->scriptName != NULL) {
-	if (Tcl_EvalFile(conf->mainInterp, (char *) conf->scriptName) ==
-	    TCL_ERROR) {
+	if (Tcl_EvalFile(mainInterp, (char *) conf->scriptName) == TCL_ERROR) {
 	    errno = 0;
-#ifndef APACHE2
-	    ap_log_printf(conf->server, "%s", Tcl_GetStringResult(conf->mainInterp));
-#else /* APACHE2 */
-	    ap_log_error(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0,
-			 conf->server, "%s", Tcl_GetStringResult(conf->mainInterp));
-#endif /* APACHE2 */
+	    AP_LOG_ERROR(conf->server, "%s", Tcl_GetStringResult(mainInterp));
 	    return TCL_ERROR;
 	}
-	Tcl_ResetResult(conf->mainInterp);
+	Tcl_ResetResult(mainInterp);
     }
     return TCL_OK;
 }
