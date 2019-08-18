@@ -51,11 +51,7 @@
 
 typedef struct
 {
-#ifndef APACHE2
-    char *scriptName;
-#else				/* APACHE2 */
     const char *scriptName;
-#endif				/* APACHE2 */
     Tcl_Interp *mainInterp;
     Tcl_Mutex mainInterpLock;
     Tcl_HashTable *webshPool;

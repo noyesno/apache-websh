@@ -108,30 +108,23 @@ static apr_status_t cleanup_websh_pool(void *conf)
 }
 #endif /* APACHE2 */
 
-static void *create_websh_config(APPOOL * p, server_rec * s)
+static void *create_websh_config(APPOOL * pool, server_rec * s)
 {
 
-    websh_server_conf *c =
-#ifndef APACHE2
-	(websh_server_conf *) ap_palloc(p, sizeof(websh_server_conf));
-#else				/* APACHE2 */
-	(websh_server_conf *) apr_palloc(p, sizeof(websh_server_conf));
-#endif /* APACHE2 */
-    c->scriptName = NULL;
-    c->mainInterp = NULL;
-    c->mainInterpLock = NULL;
-    c->webshPool = NULL;
-    c->webshPoolLock = NULL;
-    c->server = s;
+    websh_server_conf *conf;
 
-    /* make sure we call cleanup the our websh pool when this memory is freed */
-#ifndef APACHE2
-    ap_register_cleanup(p, (void *) c, cleanup_websh_pool, ap_null_cleanup);
-#else /* APACHE2 */
-    apr_pool_cleanup_register(p, (void *) c, cleanup_websh_pool, apr_pool_cleanup_null);
-#endif /* APACHE2 */
+    conf = (websh_server_conf *) apr_palloc(pool, sizeof(websh_server_conf));
 
-    return c;
+    conf->scriptName = NULL;
+    conf->mainInterp = NULL;
+    conf->mainInterpLock = NULL;
+    conf->webshPool = NULL;
+    conf->webshPoolLock = NULL;
+    conf->server = s;
+
+    apr_pool_cleanup_register(pool, conf, cleanup_websh_pool, apr_pool_cleanup_null);
+
+    return conf;
 }
 
 static void *merge_websh_config(APPOOL * p, void *basev, void *overridesv)
@@ -151,13 +144,9 @@ static const char *set_webshscript(cmd_parms * cmd, void *dummy, const char *arg
 {
     server_rec *s = cmd->server;
     websh_server_conf *conf =
-	(websh_server_conf *) ap_get_module_config(s->module_config,
-						   &websh_module);
-#ifdef APACHE2
+	(websh_server_conf *) ap_get_module_config(s->module_config, &websh_module);
+
     conf->scriptName = ap_server_root_relative(cmd->pool, arg);
-#else /* APACHE2 */
-    conf->scriptName = ap_server_root_relative(cmd->pool, (char *) arg);
-#endif
 
     return NULL;
 }
