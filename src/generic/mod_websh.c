@@ -87,6 +87,12 @@ module AP_MODULE_DECLARE_DATA websh_module;
 #define APPOOL apr_pool_t
 #endif /* APACHE2 */
 
+#ifdef APACHE2
+  #define AP_LOG_RERROR(r, ...) ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r, __VA_ARGS__);
+#else
+  #define AP_LOG_RERROR(r, ...) ap_log_rerror(APLOG_MARK, APLOG_ERR, r, __VA_ARGS__);
+#endif
+
 /* ============================================================================
  * httpd config and log handling
  * ========================================================================= */
@@ -187,9 +193,22 @@ static const command_rec websh_cmds[] = {
 };
 
 /* ----------------------------------------------------------------------------
- * run_websh_script
+ * websh_run_script
  * ------------------------------------------------------------------------- */
-static int run_websh_script(request_rec * r)
+static apr_status_t release_webinterp(void *data) {
+    WebInterp *webInterp = (WebInterp *) data;
+
+    if(webInterp->state == WIP_EXPIRED_INUSE){
+       // TODO:
+    }
+
+    Tcl_DeleteAssocData(webInterp->interp, WEB_AP_ASSOC_DATA);
+    Tcl_DeleteAssocData(webInterp->interp, WEB_INTERP_ASSOC_DATA);
+
+    poolReleaseThreadWebInterp(webInterp);
+}
+
+static int websh_run_script(request_rec * r)
 {
 
     WebInterp *webInterp = NULL;
@@ -198,142 +217,90 @@ static int run_websh_script(request_rec * r)
 						   &websh_module);
     long request_time = apr_time_now();
 
+    // TODO: script timeout check
     /* checkme: check type of timeout in MP case */
     /* ap_soft_timeout("!!! timeout for run_websh_script expired", r); */
 
-#ifndef APACHE2
-
-    /* ap_log_printf(r->server,"mtime of %s: %ld",r->filename,r->finfo.st_mtime); */
-    webInterp = poolGetWebInterp(conf, r->filename, r->finfo.st_mtime, r);
-    if (webInterp == NULL || webInterp->interp == NULL) {
-	ap_log_printf(r->server, "mod_websh - no interp!");
-	return 0;
-    }
-
-#else /* APACHE2 */
-
-    /* ap_log_rerror(APLOG_MARK, APLOG_NOERRNO|APLOG_ERR, 0, r, "mtime of %s: %ld",r->filename,r->finfo.mtime); */
     webInterp = poolGetThreadWebInterp(conf, r->filename, (long) r->finfo.mtime, r);
-    /* ap_log_rerror(APLOG_MARK, APLOG_NOERRNO|APLOG_ERR, 0, r, "got pool %p", webInterp); */
+
     if (webInterp == NULL){
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-		      "mod_websh - no interp!");
-	return 0;
+	return HTTP_INTERNAL_SERVER_ERROR;
     }
 
-    if (webInterp->interp == NULL) {
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-		      "mod_websh - null interp!");
 
-        expireWebInterp(webInterp);
-        poolReleaseThreadWebInterp(webInterp);
-	return 0;
-    }
+    apr_pool_cleanup_register(r->pool, webInterp, release_webinterp, apr_pool_cleanup_null);
 
-#endif /* APACHE2 */
-
-    if (Tcl_InterpDeleted(webInterp->interp)) {
-        #ifndef APACHE2
-	ap_log_printf(r->server,
-		      "mod_websh - hey, somebody is deleting the interp!");
-        #else /* APACHE2 */
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-		      "mod_websh - hey, somebody is deleting the interp!");
-        #endif /* APACHE2 */
-
-        expireWebInterp(webInterp);
-        poolReleaseThreadWebInterp(webInterp);
-	return 0;
-    }
-
-    int succ = 0;
     webInterp->time_request = request_time;
     webInterp->time_ready   = apr_time_now();
 
-    Tcl_SetAssocData(webInterp->interp, WEB_AP_ASSOC_DATA, NULL,
-		     (ClientData) r);
-    Tcl_SetAssocData(webInterp->interp, WEB_INTERP_ASSOC_DATA, NULL,
-		     (ClientData) webInterp);
-
+    int status = OK;
     do {
-	if (createApchannel(webInterp->interp, r) != TCL_OK) {
-	    #ifndef APACHE2
-	    ap_log_printf(r->server, "mod_websh - cannot create apchannel");
-	    #else /* APACHE2 */
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-			  "mod_websh - cannot create apchannel");
-	    #endif /* APACHE2 */
 
-	    break;
-	}
+      if (createApchannel(webInterp->interp, r) != TCL_OK) {
+          expireWebInterp(webInterp);  // XXX: mark this interp as expired
 
-	do {
-	    if (Tcl_Eval(webInterp->interp, "web::ap::perReqInit") != TCL_OK) {
-		#ifndef APACHE2
-		ap_log_printf(r->server,
-			      "mod_websh - cannot init per-request Websh code: %s", Tcl_GetStringResult(webInterp->interp));
-		#else /* APACHE2 */
-		ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-			      "mod_websh - cannot init per-request Websh code: %s", Tcl_GetStringResult(webInterp->interp));
-		#endif /* APACHE2 */
-		break;
-	    }
+	  AP_LOG_RERROR(r, "mod_websh - cannot create apchannel");
+      
+	  status = HTTP_INTERNAL_SERVER_ERROR;
+          break;
+      }
 
-	    if (webInterp->code != NULL) {
-		int res = 0;
+      Tcl_SetAssocData(webInterp->interp, WEB_AP_ASSOC_DATA, NULL, (ClientData) r);
+      Tcl_SetAssocData(webInterp->interp, WEB_INTERP_ASSOC_DATA, NULL, (ClientData) webInterp);
 
-		Tcl_IncrRefCount(webInterp->code);
-		res = Tcl_EvalObjEx(webInterp->interp, webInterp->code, 0);
-		Tcl_DecrRefCount(webInterp->code);
+      //-------------------------------------------------------//
 
-		if (res != TCL_OK) {
+      if (Tcl_Eval(webInterp->interp, "web::ap::perReqInit") != TCL_OK) {
+          expireWebInterp(webInterp);  // XXX: mark this interp as expired
 
-		    char *errorInfo = NULL;
-		    errorInfo =
-			(char *) Tcl_GetVar(webInterp->interp, "errorInfo", TCL_GLOBAL_ONLY);
-		    logToAp(webInterp->interp, NULL, errorInfo);
-		}
+	  AP_LOG_RERROR(r, "mod_websh - cannot init per-request Websh code: %s", Tcl_GetStringResult(webInterp->interp));
+	  status = HTTP_INTERNAL_SERVER_ERROR;
+          break;
+      }
 
-		Tcl_ResetResult(webInterp->interp);
-	    }
 
-	    if (Tcl_Eval(webInterp->interp, "web::ap::perReqCleanup") != TCL_OK) {
-		#ifndef APACHE2
-		ap_log_printf(r->server, "mod_websh - error while cleaning-up: %s", Tcl_GetStringResult(webInterp->interp));
-		#else /* APACHE2 */
-		ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-			      "mod_websh - error while cleaning-up: %s", Tcl_GetStringResult(webInterp->interp));
-		#endif /* APACHE2 */
-		break;
-	    }
+      int res;
 
-	    succ = 1;
-	} while(0);
+      Tcl_IncrRefCount(webInterp->code);
+      res = Tcl_EvalObjEx(webInterp->interp, webInterp->code, 0);
+      Tcl_DecrRefCount(webInterp->code);
 
-	// Free Resource
-	if (destroyApchannel(webInterp->interp) != TCL_OK) {
-	    #ifndef APACHE2
-	    ap_log_printf(r->server, "mod_websh - error closing ap-channel");
-	    #else /* APACHE2 */
-	    ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-			  "mod_websh - error closing ap-channel");
-	    #endif /* APACHE2 */
-	    succ = 0;
-	}
-    }while(0);
+      if (res != TCL_OK) {
+	  expireWebInterp(webInterp);  // XXX: mark this interp as expired
 
-    Tcl_DeleteAssocData(webInterp->interp, WEB_AP_ASSOC_DATA);
-    Tcl_DeleteAssocData(webInterp->interp, WEB_INTERP_ASSOC_DATA);
+	  char *errorInfo = NULL;
+	  errorInfo =
+	      (char *) Tcl_GetVar(webInterp->interp, "errorInfo", TCL_GLOBAL_ONLY);
 
-    if(!succ){
-      expireWebInterp(webInterp);
-    }
+	  logToAp(webInterp->interp, NULL, errorInfo);
 
-    poolReleaseThreadWebInterp(webInterp);
+	  AP_LOG_RERROR(r, "mod_websh - websh script error : %s", Tcl_GetStringResult(webInterp->interp));
 
-    /* ap_kill_timeout(r); */
+          // TODO: treat script error as HTTP_INTERNAL_SERVER_ERROR or not?
+	  // status = HTTP_INTERNAL_SERVER_ERROR;
+      }
 
-    return succ;
+      Tcl_ResetResult(webInterp->interp);
+
+      if (Tcl_Eval(webInterp->interp, "web::ap::perReqCleanup") != TCL_OK) {
+          expireWebInterp(webInterp);  // XXX: mark this interp as expired
+	  AP_LOG_RERROR(r, "mod_websh - error while cleaning-up: %s", Tcl_GetStringResult(webInterp->interp));
+	  status = HTTP_INTERNAL_SERVER_ERROR;
+      }
+      //-------------------------------------------------------//
+
+      if (destroyApchannel(webInterp->interp) != TCL_OK) {
+          expireWebInterp(webInterp);  // XXX: mark this interp as expired
+
+	  AP_LOG_RERROR(r, "mod_websh - error closing ap-channel");
+	  status = HTTP_INTERNAL_SERVER_ERROR;
+      }
+
+    } while(0); 
+
+    apr_pool_cleanup_run(r->pool, webInterp, release_webinterp);
+
+    return status;
 }
 
 /* ----------------------------------------------------------------------------
@@ -345,14 +312,14 @@ static int websh_handler(request_rec * r)
 
     int res;
 
-#ifdef APACHE2
-    if (!r->handler || strcmp(r->handler, WEBSH_HANDLER))
+    if (!r->handler || strcmp(r->handler, WEBSH_HANDLER)){
 	return DECLINED;
-#endif /* APACHE2 */
+    }
 
     /* We don't check to see if the file exists, because it might be
      * mapped with web::interpmap. */
 
+    /* XXX: prepare to receive data */
     if ((res = ap_setup_client_block(r, REQUEST_CHUNKED_ERROR)))
 	return res;
 
@@ -369,20 +336,11 @@ static int websh_handler(request_rec * r)
     /* ---------------------------------------------------------------------
      * ready to rumble
      * --------------------------------------------------------------------- */
-    if (!run_websh_script(r)) {
-#ifndef APACHE2
-	ap_log_rerror(APLOG_MARK, APLOG_ERR, r,
-		      "couldn't run websh script: %s",
-		      r->filename);
-#else /* APACHE2 */
-	ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r,
-		      "couldn't run websh script: %s",
-		      r->filename);
-#endif /* APACHE2 */
-	return HTTP_INTERNAL_SERVER_ERROR;
-    }
+    int status;
 
-    return OK;			/* NOT r->status, even if it has changed. */
+    status = websh_run_script(r);
+
+    return status;			/* NOT r->status, even if it has changed. */
 }
 
 static int websh_post_config(apr_pool_t *pconf, apr_pool_t *ptemp,

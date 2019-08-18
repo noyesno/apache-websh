@@ -314,7 +314,7 @@ WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
 	AP_LOG_RERROR(r, "mod_websh - null interp!");
         
 	return NULL;
-    } else if (webInterp->code != NULL) {
+    } else if (webInterp->code == NULL) {
         expireWebInterp(webInterp);
 	AP_LOG_RERROR(r, "mod_websh - interp code is null!");
 	return NULL;
@@ -481,6 +481,12 @@ static apr_status_t hookReleaseThreadPool(websh_server_conf *conf, request_rec *
  * poolCreateWebInterp
  * ------------------------------------------------------------------------- */
 
+#define DOUBLE_LIST_PREPEND(node, head, tail) \
+	node->prev=NULL ; node->next = head ; \
+	if(head!=NULL) head->prev=node; \
+	if(tail==NULL) tail = node; \
+	head = node;
+
 static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
 			   WebInterpClass * webInterpClass, char *filename,
 			   long mtime, request_rec *r)
@@ -491,23 +497,24 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
     Tcl_Obj *code = NULL;
     ApFuncs *apFuncs = NULL;
 
+    apFuncs = Tcl_GetAssocData(conf->mainInterp, WEB_APFUNCS_ASSOC_DATA, NULL);
+    if (apFuncs == NULL){
+	return NULL;
+    }
+
     WebInterp *webInterp = (WebInterp *) Tcl_Alloc(sizeof(WebInterp));
 
     webInterp->interp = Tcl_CreateInterp();
-    Tcl_Preserve(webInterp->interp);
 
     DEBUG_TRACE2(conf->server, "createWebInterp %p in thread %ld", webInterp->interp, Tcl_GetCurrentThread());
 
     if (webInterp->interp == NULL) {
 	Tcl_Free((char *) webInterp);
-#ifndef APACHE2
-	ap_log_printf(conf->server, "createWebInterp: Could not create interpreter (id %ld, class %s)", webInterpClass->nextid, filename);
-#else /* APACHE2 */
-	ap_log_error(APLOG_MARK, APLOG_ERR, 0, conf->server,
-		     "createWebInterp: Could not create interpreter (id %ld, class %s)", webInterpClass->nextid, filename);
-#endif /* APACHE2 */
+	AP_LOG_RERROR(r, "createWebInterp: Could not create interpreter (id %ld, class %s)", webInterpClass->nextid, filename);
 	return NULL;
     }
+
+    // Tcl_Preserve(webInterp->interp);
 
     /* just to be sure the memory command is imported if 
        the corresponding Tcl features it */
@@ -519,9 +526,30 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
     result = Tcl_Init(webInterp->interp);
     /* checkme: test result */
 
-    apFuncs = Tcl_GetAssocData(conf->mainInterp, WEB_APFUNCS_ASSOC_DATA, NULL);
-    if (apFuncs == NULL)
+    if (webInterpClass->code == NULL) {
+	if (readWebInterpCode(webInterp, filename) == TCL_OK) {
+	    /* copy code to class */
+	    webInterpClass->code = Tcl_DuplicateObj(webInterp->code);
+	    Tcl_IncrRefCount(webInterpClass->code);
+	    webInterpClass->mtime = mtime;
+	} else {
+	    webInterp->code = NULL;
+	    AP_LOG_RERROR(r, "Could not readWebInterpCode (id %ld, class %s): %s",
+			 webInterp->id, filename, Tcl_GetStringResult(webInterp->interp));
+	}
+    } else {
+	/* copy code from class */
+	webInterp->code = Tcl_DuplicateObj(webInterpClass->code);
+	Tcl_IncrRefCount(webInterp->code);
+    }
+
+    if (webInterp->code == NULL){
+	AP_LOG_RERROR(r, "debug: mod_websh - WebInterp code is null, delete interp");
+        Tcl_DeleteInterp(webInterp->interp);
+	Tcl_Free((char *) webInterp);
 	return NULL;
+    }
+
     Tcl_SetAssocData(webInterp->interp, WEB_APFUNCS_ASSOC_DATA, NULL, (ClientData *) apFuncs);
 
     result = Websh_Init(webInterp->interp);
@@ -533,8 +561,12 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
      * register log handler "apachelog"
      * --------------------------------------------------------------------- */
     logtoap = createLogPlugIn();
-    if (logtoap == NULL)
+    if (logtoap == NULL){
+	AP_LOG_RERROR(r, "debug: mod_websh - createLogPlugIn fail");
+        Tcl_DeleteInterp(webInterp->interp);
+	Tcl_Free((char *) webInterp);
 	return NULL;
+    }
 
     logtoap->constructor = createLogToAp;
     logtoap->destructor = destroyLogToAp;
@@ -588,45 +620,11 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
     webInterp->originThrdId = Tcl_GetCurrentThread();
 
     /* add to beginning of list of webInterpClass */
-    webInterp->next = webInterpClass->first;
-    if (webInterp->next != NULL)
-      webInterp->next->prev = webInterp;
-    webInterpClass->first = webInterp;
-    webInterp->prev = NULL;
-
-    if (webInterpClass->last == NULL)
-	webInterpClass->last = webInterp;
-
-    if (webInterpClass->code != NULL) {
-	/* copy code from class */
-	webInterp->code = Tcl_DuplicateObj(webInterpClass->code);
-	Tcl_IncrRefCount(webInterp->code);
-    } else {
-	/* load the code into the object */
-	if (readWebInterpCode(webInterp, filename) == TCL_OK) {
-	    /* copy code to class */
-	    webInterpClass->code = Tcl_DuplicateObj(webInterp->code);
-	    Tcl_IncrRefCount(webInterpClass->code);
-	    webInterpClass->mtime = mtime;
-	}
-	else {
-	    webInterp->code = NULL;
-#ifndef APACHE2
-	    ap_log_printf(r->server,
-			  "Could not readWebInterpCode (id %ld, class %s): %s",
-			  webInterp->id, filename, Tcl_GetStringResult(webInterp->interp));
-#else /* APACHE2 */
-	    ap_log_error(APLOG_MARK, APLOG_ERR, 0, r->server,
-			 "Could not readWebInterpCode (id %ld, class %s): %s",
-			 webInterp->id, filename, Tcl_GetStringResult(webInterp->interp));
-#endif /* APACHE2 */
-	}
-    }
-
-    hookReleaseThreadPool(conf, r);
+    DOUBLE_LIST_PREPEND(webInterp, webInterpClass->first, webInterpClass->last);
 
     return webInterp;
 }
+
 
 /* ----------------------------------------------------------------------------
  * poolDestroyWebInterp
@@ -700,7 +698,7 @@ static void poolDestroyWebInterp(WebInterp * webInterp, int flag)
     }
 
     Tcl_DeleteInterp(webInterp->interp);
-    Tcl_Release(webInterp->interp);
+    // Tcl_Release(webInterp->interp);
 
     removeWebInterp(webInterp);
 
@@ -987,7 +985,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
 
     LogPlugIn *logtoap = NULL;
     Tcl_Interp *mainInterp = Tcl_CreateInterp();
-    Tcl_Preserve(mainInterp);
+    // Tcl_Preserve(mainInterp);
     ApFuncs *apFuncs;
 
     if (mainInterp == NULL) {
@@ -998,7 +996,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     if (Tcl_InitStubs(mainInterp,"8.2",0) == NULL) {
       DEBUG_TRACE(conf->server, "Tcl_InitStubs mainInterp fail");
       Tcl_DeleteInterp(mainInterp);
-      Tcl_Release(mainInterp);
+      // Tcl_Release(mainInterp);
       return NULL;
     }
 
@@ -1011,7 +1009,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     apFuncs = createApFuncs();
     if (apFuncs == NULL) {
         Tcl_DeleteInterp(mainInterp);
-        Tcl_Release(mainInterp);
+        // Tcl_Release(mainInterp);
 	return NULL;
     }
     Tcl_SetAssocData(mainInterp, WEB_APFUNCS_ASSOC_DATA, destroyApFuncs, (ClientData *) apFuncs);
@@ -1021,7 +1019,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
         DEBUG_TRACE(conf->server, "Tcl_Init mainInterp fail with!");
         DEBUG_TRACE(conf->server, Tcl_GetStringResult(mainInterp));
 	Tcl_DeleteInterp(mainInterp);
-        Tcl_Release(mainInterp);
+        // Tcl_Release(mainInterp);
 	return NULL;
     }
 
@@ -1029,7 +1027,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     if (ModWebsh_Init(mainInterp) == TCL_ERROR) {
         DEBUG_TRACE(conf->server, "ModWebsh_Init mainInterp fail!");
 	Tcl_DeleteInterp(mainInterp);
-        Tcl_Release(mainInterp);
+        // Tcl_Release(mainInterp);
 	return NULL;
     }
 
@@ -1039,7 +1037,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     logtoap = createLogPlugIn();
     if (logtoap == NULL) {
 	Tcl_DeleteInterp(mainInterp);
-        Tcl_Release(mainInterp);
+        // Tcl_Release(mainInterp);
 	return NULL;
     }
     logtoap->constructor = createLogToAp;
@@ -1050,7 +1048,7 @@ Tcl_Interp *createMainInterp(websh_server_conf * conf)
     /* eval init code */
     if (Tcl_Eval(mainInterp, MAININTERP_INITCODE) == TCL_ERROR) {
 	Tcl_DeleteInterp(mainInterp);
-        Tcl_Release(mainInterp);
+        // Tcl_Release(mainInterp);
 	return NULL;
     }
 
@@ -1107,7 +1105,7 @@ void destroyPool(websh_server_conf * conf)
 	/* now delete the interp */
         DEBUG_TRACE(conf->server, "Tcl_DeleteInterp mainInterp by thread %ld", Tcl_GetCurrentThread());
 	Tcl_DeleteInterp(conf->mainInterp);
-        Tcl_Release(conf->mainInterp);
+        // Tcl_Release(conf->mainInterp);
 	conf->mainInterp = NULL;
     }
 
@@ -1200,14 +1198,12 @@ static int readWebInterpCode(WebInterp * webInterp, char *filename)
 	Tcl_ResetResult(interp);
 	Tcl_AppendResult(interp, "couldn't read file \"", filename,
 			 "\": ", Tcl_ErrnoMsg(Tcl_GetErrno()), (char *) NULL);
-    }
-    else {
+    } else {
 	if (Tcl_ReadChars(chan, objPtr, -1, 0) < 0) {
 	    Tcl_Close(interp, chan);
 	    Tcl_AppendResult(interp, "couldn't read file \"", filename,
 			     "\": ", Tcl_ErrnoMsg(Tcl_GetErrno()), (char *) NULL);
-	}
-	else {
+	} else {
 	    if (Tcl_Close(interp, chan) == TCL_OK) {
 		/* finally success ... */
 		webInterp->code = objPtr;

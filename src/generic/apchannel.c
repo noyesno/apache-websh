@@ -143,8 +143,7 @@ int createApchannel(Tcl_Interp * interp, request_rec * r)
 	flag = TCL_WRITABLE | TCL_READABLE;
     }
 
-    channel = Tcl_CreateChannel(&apChannelType, APCHANNEL,
-				(ClientData) r, flag);
+    channel = Tcl_CreateChannel(&apChannelType, APCHANNEL, (ClientData) r, flag);
 
     if (channel == NULL)
 	return TCL_ERROR;
@@ -170,17 +169,12 @@ int destroyApchannel(Tcl_Interp * interp)
 
     mode = 0;
     if (channel == NULL) {
-	mode++;
-    }
-    else {
-
-	if (Tcl_UnregisterChannel(interp, channel) != TCL_OK)
-	    mode++;
-    }
-
-    if (mode)
 	return TCL_ERROR;
-    else
-	return TCL_OK;
+    }
 
+    if (Tcl_UnregisterChannel(interp, channel) != TCL_OK){
+	return TCL_ERROR;
+    }
+
+    return TCL_OK;
 }
