@@ -141,6 +141,9 @@ proc web::uri2list {string} {
 namespace eval web::ap {}
 
 proc web::ap::perReqInit {} {
+    web::request -reset
+    web::response -resetall
+    web::cmdurlcfg -reset
 }
 
 proc web::ap::perReqCleanup {} {
