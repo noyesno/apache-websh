@@ -1,3 +1,4 @@
+# vim:set syntax=tcl :#
 #
 # script.ws3 -- the commands of websh3 that are implemented as Tcl scripts
 # nca-073-9
@@ -141,12 +142,22 @@ proc web::uri2list {string} {
 namespace eval web::ap {}
 
 proc web::ap::perReqInit {} {
+    variable onexit_queue [list]
+
     web::request -reset
     web::response -resetall
     web::cmdurlcfg -reset
 }
 
 proc web::ap::perReqCleanup {} {
+    variable onexit_queue
+
+    foreach command $onexit_queue {
+      catch {
+        uplevel 1 $command
+      }
+    }
+
     # reset logging (except stuff from web::initializer)
     web::loglevel delete -requests
     web::logdest delete -requests
@@ -156,6 +167,12 @@ proc web::ap::perReqCleanup {} {
     web::response -resetall
     # reset url data
     web::cmdurlcfg -reset
+}
+
+proc web::onexit {command} {
+    variable onexit_queue
+
+    lappend onexit_queue $command
 }
 
 #-----------------------------------------------------------------------------
