@@ -378,6 +378,7 @@ int webout_eval_tag(Tcl_Interp * interp, ResponseObj * responseObj,
   int inside = 0;
   int inLen = 0;
   int res = 0;
+  int subst_result = 0;
 
   next = Tcl_GetStringFromObj(in, &inLen);
   outbuf = Tcl_NewStringObj("", -1);
@@ -409,6 +410,7 @@ int webout_eval_tag(Tcl_Interp * interp, ResponseObj * responseObj,
 	Tcl_AppendToObj(outbuf, "\\", 1);
       }
     } else if (strncmp(strstart, cur, startseqlen) == 0) {
+      /* see start tag */
       if ((++inside) == 1) {
 	if (firstScan == 1) {
 	  begin = 0;
@@ -420,6 +422,21 @@ int webout_eval_tag(Tcl_Interp * interp, ResponseObj * responseObj,
 	if (startseqlen > 1) {
 	  next += startseqlen - 1;
 	}
+
+        /* see <?= ... ?> */
+        if(next[0] == '='){
+          subst_result = 1;
+          next++;  // skip '='
+        } else {
+          subst_result = 0;
+        }
+
+        /* TODO: <?= $var ?>  , {{$var}}, [[set var]] */
+
+        if(subst_result){
+          /* subst result */
+	  Tcl_AppendToObj(outbuf, "web::put [", -1);
+        }
       }  else {
 	Tcl_AppendToObj(outbuf, cur, startseqlen);
 	if (startseqlen > 1) {
@@ -427,12 +444,20 @@ int webout_eval_tag(Tcl_Interp * interp, ResponseObj * responseObj,
 	}
       }
     } else if (strncmp(strend, cur, endseqlen) == 0) {
+      /* see end tag */
       if (firstScan == 1) { firstScan = 0; }
       if ((--inside) == 0) {
+
+        /* subst result */
+        if(subst_result){
+	  Tcl_AppendToObj(outbuf, "]", -1);
+        }
+
 	Tcl_AppendToObj(outbuf, "\nweb::put \"", -1);
 	if (endseqlen > 1) {
 	  next += endseqlen - 1;
 	}
+
       } else {
 	Tcl_AppendToObj(outbuf, cur, endseqlen);
 	if (endseqlen > 1) {

@@ -28,8 +28,6 @@
 #define HTTP_RESPONSE "HTTP/1.0 200 OK"
 #define HEADER "Content-Type","text/html", "Generator", WEBSH " " VERSION
 
-#define PUTXMARKUPDEFAULT 0
-
 /* ----------------------------------------------------------------------------
  * typedefs
  * ------------------------------------------------------------------------- */
@@ -61,6 +59,8 @@ typedef enum PutxMarkup
     brace = 0, tag = 1
 }
 PutxMarkup;
+
+#define PUTXMARKUPDEFAULT 1
 
 typedef struct OutData
 {
