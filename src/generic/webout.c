@@ -241,6 +241,12 @@ int Web_Response(ClientData clientData, Tcl_Interp * interp,
 
     /* handle first paramList things */
     /* note: the keys might not be strictly case sensitive */
+    /*
+     * web::response -set key ?value?
+     * web::response -names
+     * web::response -unset ?key?
+     * web::response -count key
+     */
     res = paramGet((ParamList *) responseObj->headers, interp, objc, objv, 1);
 
     if (res == TCL_CONTINUE) {

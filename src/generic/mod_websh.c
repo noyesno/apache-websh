@@ -215,8 +215,6 @@ static int websh_run_script(request_rec * r)
     websh_server_conf *conf =
 	(websh_server_conf *) ap_get_module_config(r->server->module_config,
 						   &websh_module);
-    long request_time = apr_time_now();
-
     // TODO: script timeout check
     /* checkme: check type of timeout in MP case */
     /* ap_soft_timeout("!!! timeout for run_websh_script expired", r); */
@@ -230,7 +228,7 @@ static int websh_run_script(request_rec * r)
 
     apr_pool_cleanup_register(r->pool, webInterp, release_webinterp, apr_pool_cleanup_null);
 
-    webInterp->time_request = request_time;
+    webInterp->time_request = r->request_time;
     webInterp->time_ready   = apr_time_now();
 
     int status = OK;

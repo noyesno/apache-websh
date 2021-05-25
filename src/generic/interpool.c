@@ -40,6 +40,7 @@
 #endif
 
 #include <tcl.h>
+#include <assert.h>
 
 #define TCL_TSD_INIT(keyPtr) \
   ((ThreadSpecificData *)Tcl_GetThreadData((keyPtr), sizeof(ThreadSpecificData)))
@@ -60,6 +61,8 @@ static Tcl_ThreadDataKey dataKey;
 #define WIP_CURRENT_THREAD 0
 #define WIP_CHECK_THREAD   1
 #define WIP_FORCE_REMOVE   2
+
+/* #define DEBUG 1 */
 
 #ifdef DEBUG
   static char debug_trace_message[4096];
@@ -82,8 +85,8 @@ static Tcl_ThreadDataKey dataKey;
   #define AP_LOG_ERROR(server, ...) ap_log_printf(server, __VA_ARGS__);
   #define AP_LOG_RERROR(r, ...) ap_log_rerror(APLOG_MARK, APLOG_ERR, r, __VA_ARGS__);
 #else /* APACHE2 */
-  #define AP_LOG_ERROR(server, ...) ap_log_error(APLOG_MARK, APLOG_ERR, 0, server, __VA_ARGS__);
-  #define AP_LOG_RERROR(r, ...)     ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r, __VA_ARGS__);
+  #define AP_LOG_ERROR(server, format, ...) ap_log_error(APLOG_MARK, APLOG_ERR, 0, server, format, ##__VA_ARGS__);
+  #define AP_LOG_RERROR(r, format, ...) ap_log_rerror(APLOG_MARK, APLOG_NOERRNO | APLOG_ERR, 0, r, format, ##__VA_ARGS__);
 #endif
 
 
@@ -101,8 +104,8 @@ static void       poolDestroyWebInterp(WebInterp * webInterp, int flag);
 static int             poolDestroyWebInterpClass(WebInterpClass * webInterpClass);
 
 static WebInterpClass *updateWebInterpClass(
-   const char *newfile, const char *oldfile,
-   long mtime, WebInterpClass *webInterpClass
+   WebInterpClass *webInterpClass,
+   const char *newfile, long mtime
 );
 
 
@@ -276,29 +279,19 @@ WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
     WebInterp      *webInterp = NULL;
 
     webInterpClass = poolCreateWebInterpClass(conf, tsdPtr->webshPool, filename, mtime);
-
-    if(webInterpClass!=NULL && webInterpClass->first!=NULL){
-	/* check if mtime is ok */
-        char *id=filename;
-        webInterpClass = updateWebInterpClass(id, filename, mtime, webInterpClass);
-    }
-
     if(webInterpClass==NULL){
-       #ifndef APACHE2
-       ap_log_printf(r->server,
-           	  "cannot access or stat webInterpClass file '%s'", filename);
-       #else /* APACHE2 */
-       ap_log_error(APLOG_MARK, APLOG_ERR, 0, r->server,
-           	 "cannot access or stat webInterpClass file '%s'", filename);
-       #endif /* APACHE2 */
-
+       AP_LOG_ERROR(r->server, "cannot access or stat webInterpClass file '%s'", filename);
        return NULL;
     }
 
+    AP_LOG_DEBUG(r->server, "use WebInterpClass maxrequests=%ld maxttl=%ld maxidletime=%ld mtime=%ld from %s",
+        webInterpClass->maxrequests, webInterpClass->maxttl, webInterpClass->maxidletime,
+        webInterpClass->mtime, webInterpClass->filename);
 
     webInterp = poolGetFreeWebInterp(webInterpClass);
 
     if( webInterp==NULL ) {
+        AP_LOG_DEBUG(r->server, "create new WebInterp %ld %s", mtime, filename);
 	webInterp = poolCreateWebInterp(conf, webInterpClass, filename, mtime, r);
     }
 
@@ -325,7 +318,12 @@ WebInterp *poolGetThreadWebInterp(websh_server_conf *conf, char *filename,
 	return NULL;
     }
 
-    AP_LOG_DEBUG(r->server, "reserve interpreter %% id = %ld , class = %s", webInterp->id, webInterp->interpClass->filename);
+    AP_LOG_DEBUG(r->server, "reserve WebInterp #%ld %ld/%ld of class %ld %s",
+       webInterp->id,
+       webInterp->numrequests, webInterp->interpClass->maxrequests,
+       webInterp->interpClass->mtime,
+       webInterp->interpClass->filename
+    );
 
     webInterp->req = r;
     reserveWebInterp(webInterp);
@@ -345,6 +343,20 @@ void poolReleaseThreadWebInterp(WebInterp * webInterp)
 /* ----------------------------------------------------------------------------
  * poolCreateWebInterpClass
  * ------------------------------------------------------------------------- */
+static inline WebInterpClass *poolLookupWebInterpClass(Tcl_HashTable *webshPool, char *filename){
+    WebInterpClass *webInterpClass = NULL;
+
+    Tcl_HashEntry *entry;
+
+    entry = Tcl_FindHashEntry(webshPool, filename);
+    if (entry == NULL) {
+        return NULL;
+    }
+
+    webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
+    return webInterpClass;
+}
+
 WebInterpClass *poolCreateWebInterpClass(
     websh_server_conf * conf,
     Tcl_HashTable *webshPool,
@@ -354,12 +366,17 @@ WebInterpClass *poolCreateWebInterpClass(
 {
     WebInterpClass *webInterpClass = NULL;
 
-    Tcl_HashEntry *entry;
+    webInterpClass = poolLookupWebInterpClass(webshPool, filename);
 
-    entry = Tcl_FindHashEntry(webshPool, filename);
-    if (entry != NULL) {
-	webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
-        return webInterpClass;
+    if (webInterpClass != NULL) {
+	/* check if mtime is ok */
+        webInterpClass = updateWebInterpClass(webInterpClass, filename, mtime);
+
+        if (webInterpClass != NULL) {
+          return webInterpClass;
+        } else {
+          /* TODO: destroy invalid webInterpClass */
+        }
     }
 
     webInterpClass = WebAllocInternalData(WebInterpClass);
@@ -393,6 +410,7 @@ WebInterpClass *poolCreateWebInterpClass(
 	Tcl_HashEntry *entry;
 	entry = Tcl_CreateHashEntry(webshPool, filename, &isnew);
 	/* isnew must be 1, since we searched already */
+        assert(isnew==1);
 	Tcl_SetHashValue(entry, (ClientData) webInterpClass);
     } else {
 
@@ -738,12 +756,14 @@ static Tcl_Obj *mapWebInterpClass(char *filename, Tcl_Interp *mainInterp){
 
 
 static WebInterpClass *updateWebInterpClass(
-   const char *newfile, const char *oldfile,
-   long mtime, WebInterpClass *webInterpClass
+   WebInterpClass *webInterpClass,
+   const char *newfile, long mtime
 )
 {
+    const char *oldfile = webInterpClass->filename;
+
     /* get last modified time for id */
-    if (strcmp(newfile, oldfile)) {
+    if ( newfile!=oldfile && strcmp(newfile, oldfile) ) {
 	struct stat statPtr;
 	if (Tcl_Access(newfile, R_OK) != 0 ||
  	    Tcl_Stat(newfile, &statPtr) != TCL_OK)
@@ -835,7 +855,7 @@ WebInterp *poolGetWebInterp(websh_server_conf * conf, char *filename,
 	webInterpClass = (WebInterpClass *) Tcl_GetHashValue(entry);
 
 	/* check if mtime is ok */
-        webInterpClass = updateWebInterpClass(id, filename, mtime, webInterpClass);
+        webInterpClass = updateWebInterpClass(webInterpClass, id, mtime);
 
         if( webInterpClass==NULL ){
 
@@ -1188,17 +1208,15 @@ static int readWebInterpCode(WebInterp * webInterp, char *filename)
 {
 
     Tcl_Channel chan;
-    Tcl_Obj *objPtr;
     Tcl_Interp *interp = webInterp->interp;
 
-    objPtr = Tcl_NewObj();
-    Tcl_IncrRefCount(objPtr);
     chan = Tcl_OpenFileChannel(interp, filename, "r", 0644);
     if (chan == (Tcl_Channel) NULL) {
 	Tcl_ResetResult(interp);
 	Tcl_AppendResult(interp, "couldn't read file \"", filename,
 			 "\": ", Tcl_ErrnoMsg(Tcl_GetErrno()), (char *) NULL);
     } else {
+        Tcl_Obj *objPtr = Tcl_NewObj();
 	if (Tcl_ReadChars(chan, objPtr, -1, 0) < 0) {
 	    Tcl_Close(interp, chan);
 	    Tcl_AppendResult(interp, "couldn't read file \"", filename,
@@ -1207,11 +1225,12 @@ static int readWebInterpCode(WebInterp * webInterp, char *filename)
 	    if (Tcl_Close(interp, chan) == TCL_OK) {
 		/* finally success ... */
 		webInterp->code = objPtr;
+                Tcl_IncrRefCount(objPtr);
 		return TCL_OK;
 	    }
 	}
+        Tcl_DecrRefCount(objPtr);
     }
-    Tcl_DecrRefCount(objPtr);
     return TCL_ERROR;
 }
 
