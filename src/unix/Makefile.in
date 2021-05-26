@@ -68,6 +68,8 @@ OBJECTS = $(web_OBJECTS)
 
 web_LIB_FILE = @web_LIB_FILE@
 $(web_LIB_FILE)_OBJECTS = $(web_OBJECTS)
+WEB_STATIC_LIB = libwebsh$(UNSHARED_LIB_SUFFIX)
+WEB_SHARED_LIB = libwebsh$(SHARED_LIB_SUFFIX)
 
 # =============================================================================
 # This is a list of header files to be installed
@@ -246,6 +248,9 @@ $(web_LIB_FILE): $(web_OBJECTS)
 	@MAKE_LIB@
 	$(RANLIB) $(web_LIB_FILE)
 
+libwebsh$(UNSHARED_LIB_SUFFIX): $(web_OBJECTS)
+	${STLIB_LD} $@ $(web_OBJECTS)
+
 script.h: ../generic/tcldecmt.tcl $(SCRIPT_SOURCES)
 	$(TCLSH_PROG) ../generic/tcldecmt.tcl $(SCRIPT_SOURCES) > $@
 
@@ -258,7 +263,7 @@ interpool.o: ../generic/interpool.c
 %.o: ../generic/%.c
 	$(COMPILE) -c $<
 
-websh: websh$(VERSION) $(web_LIB_FILE)
+websh: websh$(VERSION) $(web_LIB_FILE) libwebsh$(UNSHARED_LIB_SUFFIX)
 
 mod_websh.so: mod_websh$(MODULE_LIB_SUFFIX)
 
@@ -270,7 +275,7 @@ websh$(VERSION): tclAppInit.$(OBJEXT) $(web_LIB_FILE)
 
 mod_websh$(MODULE_LIB_SUFFIX): $(web_OBJECTS_ap) $(web_LIB_FILE)
 	$(SHLIB_LD_CURRENT) -o mod_websh$(MODULE_LIB_SUFFIX) \
-	$(web_OBJECTS_ap) $(web_LIB_FILE) $(TCL_LIB_SPEC) $(TCL_STUB_LIB_SPEC)
+	$(web_OBJECTS_ap) $(WEB_STATIC_LIB) $(TCL_LIB_SPEC) $(TCL_STUB_LIB_SPEC)
 
 mod_websh$(UNSHARED_LIB_SUFFIX): $(web_OBJECTS_ap) $(web_OBJECTS)
 	$(STLIB_LD) $(TCL_LD_FLAGS) -o mod_websh$(UNSHARED_LIB_SUFFIX) \
