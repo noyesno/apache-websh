@@ -18,6 +18,7 @@
 #include "log.h"
 #include "macros.h"
 #include "nca_d.h"
+#include "cfg.h"
 
 /* ----------------------------------------------------------------------------
  * init
@@ -56,13 +57,20 @@ int crypt_Init(Tcl_Interp * interp)
     /* --------------------------------------------------------------------------
      * default encrypt and decrypt chains
      * ----------------------------------------------------------------------- */
-    tmp = Tcl_NewStringObj(WEB_ENCRYPTDEFAULT, -1);
-    cryptData->encryptChain = Tcl_NewListObj(1, &tmp);
+    cryptData->encryptChain = Tcl_NewListObj(1, NULL);
     Tcl_IncrRefCount(cryptData->encryptChain);
+    if( strlen(WEBSH_CONFIG_DEFAULT_ENCRYPT)>0 ){
+      tmp = Tcl_NewStringObj(WEBSH_CONFIG_DEFAULT_ENCRYPT, -1);
+      Tcl_ListObjAppendElement(interp, cryptData->encryptChain, tmp);
+    }
 
-    tmp = Tcl_NewStringObj(WEB_DECRYPTDEFAULT, -1);
-    cryptData->decryptChain = Tcl_NewListObj(1, &tmp);
+    tmp = Tcl_NewStringObj(WEBSH_CONFIG_DEFAULT_DECRYPT, -1);
+    cryptData->decryptChain = Tcl_NewListObj(0, NULL);
     Tcl_IncrRefCount(cryptData->decryptChain);
+    if( strlen(WEBSH_CONFIG_DEFAULT_DECRYPT)>0 ){
+      tmp = Tcl_NewStringObj(WEBSH_CONFIG_DEFAULT_DECRYPT, -1);
+      Tcl_ListObjAppendElement(interp, cryptData->decryptChain, tmp);
+    }
 
     /* --------------------------------------------------------------------------
      * done
@@ -188,20 +196,18 @@ int doencrypt(Tcl_Interp * interp, Tcl_Obj * in, int internal)
 	  } else {
 	    cmd = NULL;
 	  }
-	}
-	else {
-	    if (!internal) {
-		Tcl_SetObjResult(interp, in);
-		return TCL_OK;
-	    }
-	    cmd = Tcl_NewListObj(0, NULL);
-	    Tcl_IncrRefCount(cmd);
-	    Tcl_ListObjAppendElement(interp, cmd,
-				     Tcl_NewStringObj("web::list2uri", -1));
+	} else {
+	  if (!internal) {
+	      Tcl_SetObjResult(interp, in);
+	      return TCL_OK;
+	  }
+	  cmd = Tcl_NewListObj(0, NULL);
+	  Tcl_IncrRefCount(cmd);
+	  Tcl_ListObjAppendElement(interp, cmd,
+	      		     Tcl_NewStringObj("web::list2uri", -1));
 	}
 
 	if (cmd != NULL) {
-
 	    if (Tcl_ListObjAppendElement(interp, cmd, in) != TCL_OK) {
 		Tcl_DecrRefCount(cmd);
 		return TCL_ERROR;
@@ -296,7 +302,6 @@ int dodecrypt(Tcl_Interp * interp, Tcl_Obj * in, int internal)
 	    Tcl_ListObjAppendElement(interp, cmd,
 				     Tcl_NewStringObj("web::uri2list", -1));
 	}
-
 	if (cmd != NULL) {
 
 	    if (Tcl_ListObjAppendElement(interp, cmd, in) != TCL_OK) {

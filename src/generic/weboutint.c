@@ -320,7 +320,7 @@ int resetOutData(Tcl_Interp * interp, OutData * outData)
     if ((interp == NULL) || (outData == NULL))
 	return TCL_ERROR;
 
-    outData->putxMarkup = 0;
+    outData->putxMarkup = PUTXMARKUPDEFAULT;
 
     if (destroyResponseObjHash(outData, interp) == TCL_ERROR)
 	return TCL_ERROR;

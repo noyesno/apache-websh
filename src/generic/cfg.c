@@ -536,11 +536,11 @@ int Web_Cfg(ClientData clientData, Tcl_Interp * interp,
 	cfgData->outData->putxMarkup = PUTXMARKUPDEFAULT;
 
 	cryptData = cfgData->cryptData;
-	tmp = Tcl_NewStringObj(WEB_ENCRYPTDEFAULT, -1);
+	tmp = Tcl_NewStringObj(WEBSH_CONFIG_DEFAULT_ENCRYPT, -1);
 	Tcl_IncrRefCount(tmp);
 	handleConfig(interp, &cryptData->encryptChain, tmp, 0);
 	Tcl_DecrRefCount(tmp);
-	tmp = Tcl_NewStringObj(WEB_DECRYPTDEFAULT, -1);
+	tmp = Tcl_NewStringObj(WEBSH_CONFIG_DEFAULT_DECRYPT, -1);
 	Tcl_IncrRefCount(tmp);
 	handleConfig(interp, &cryptData->decryptChain, tmp, 0);
 	Tcl_DecrRefCount(tmp);

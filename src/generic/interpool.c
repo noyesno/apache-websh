@@ -97,8 +97,12 @@ static Tcl_ThreadDataKey dataKey;
 static Tcl_Interp *createMainInterp(websh_server_conf * conf);
 static int initMainInterp(websh_server_conf * conf, Tcl_Interp *mainInterp);
 
-static WebInterp *poolCreateWebInterp(websh_server_conf * conf, WebInterpClass * webInterpClass, char *filename, long mtime, request_rec *r);
-static void       poolDestroyWebInterp(WebInterp * webInterp, int flag);
+static WebInterp *poolCreateWebInterp(
+           websh_server_conf * conf,
+           WebInterpClass * webInterpClass,
+           char *filename, long mtime,
+           request_rec *r);
+static void poolDestroyWebInterp(WebInterp * webInterp, int flag);
 
 // static WebInterpClass *poolCreateWebInterpClass(websh_server_conf * conf, Tcl_HashTable *webshPool, char *filename, long mtime);
 static int             poolDestroyWebInterpClass(WebInterpClass * webInterpClass);
@@ -109,7 +113,7 @@ static WebInterpClass *updateWebInterpClass(
 );
 
 
-static int readWebInterpCode(WebInterp * wi, char *filename);
+static int readWebInterpClassCode(WebInterpClass * wi, char *filename, long mtime);
 // static void deleteInterpClass(WebInterpClass * webInterpClass);
 
 
@@ -544,23 +548,18 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
     result = Tcl_Init(webInterp->interp);
     /* checkme: test result */
 
+    webInterp->code = NULL;
     if (webInterpClass->code == NULL) {
-	if (readWebInterpCode(webInterp, filename) == TCL_OK) {
-	    /* copy code to class */
-	    webInterpClass->code = Tcl_DuplicateObj(webInterp->code);
-	    Tcl_IncrRefCount(webInterpClass->code);
-	    webInterpClass->mtime = mtime;
-	} else {
-	    webInterp->code = NULL;
-	    AP_LOG_RERROR(r, "Could not readWebInterpCode (id %ld, class %s): %s",
-			 webInterp->id, filename, Tcl_GetStringResult(webInterp->interp));
+	if (readWebInterpClassCode(webInterpClass, filename, mtime) != TCL_OK) {
+	    AP_LOG_RERROR(r, "Could not readWebInterpClassCode for %s: %s",
+			 filename, Tcl_GetStringResult(webInterpClass->conf->mainInterp));
 	}
-    } else {
-	/* copy code from class */
-	webInterp->code = Tcl_DuplicateObj(webInterpClass->code);
-	Tcl_IncrRefCount(webInterp->code);
     }
-
+    if (webInterpClass->code != NULL) {
+	/* copy code from class */
+	webInterp->code = webInterpClass->code;
+	Tcl_IncrRefCount(webInterpClass->code);
+    }
     if (webInterp->code == NULL){
 	AP_LOG_RERROR(r, "debug: mod_websh - WebInterp code is null, delete interp");
         Tcl_DeleteInterp(webInterp->interp);
@@ -1202,13 +1201,13 @@ void cleanupPool(WebshPool *webshPool)
 
 
 /* ----------------------------------------------------------------------------
- * readWebInterpCode
+ * readWebInterpClassCode
  * ------------------------------------------------------------------------- */
-static int readWebInterpCode(WebInterp * webInterp, char *filename)
+static int readWebInterpClassCode(WebInterpClass * webInterpClass, char *filename, long mtime)
 {
 
     Tcl_Channel chan;
-    Tcl_Interp *interp = webInterp->interp;
+    Tcl_Interp *interp = webInterpClass->conf->mainInterp;
 
     chan = Tcl_OpenFileChannel(interp, filename, "r", 0644);
     if (chan == (Tcl_Channel) NULL) {
@@ -1224,7 +1223,8 @@ static int readWebInterpCode(WebInterp * webInterp, char *filename)
 	} else {
 	    if (Tcl_Close(interp, chan) == TCL_OK) {
 		/* finally success ... */
-		webInterp->code = objPtr;
+		webInterpClass->code = objPtr;
+	        webInterpClass->mtime = mtime;
                 Tcl_IncrRefCount(objPtr);
 		return TCL_OK;
 	    }

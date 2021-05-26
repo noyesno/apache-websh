@@ -19,6 +19,7 @@
 #include "crypt.h"
 #include <stdio.h>
 #include "log.h"
+#include "cfg.h"
 
 #ifdef WIN32
 #include <errno.h>
@@ -111,7 +112,7 @@ RequestData *createRequestData(Tcl_Interp * interp)
 
 	WebNewStringObjFromStringIncr(requestData->cmdTag, CMDTAGDEFAULT);
 	WebNewStringObjFromStringIncr(requestData->timeTag, TIMETAGDEFAULT);
-	requestData->cmdUrlTimestamp = Tcl_NewBooleanObj(1);
+	requestData->cmdUrlTimestamp = Tcl_NewBooleanObj(WEBSH_CONFIG_DEFAULT_TIMESTAMP);
 	Tcl_IncrRefCount(requestData->cmdUrlTimestamp);
 	HashUtlAllocInit(requestData->request, TCL_STRING_KEYS);
 
@@ -176,7 +177,7 @@ int resetRequestData(Tcl_Interp * interp, RequestData * requestData)
     WebNewStringObjFromStringIncr(requestData->cmdTag, "cmd");
 
     WebDecrRefCountIfNotNullAndSetNull(requestData->cmdUrlTimestamp);
-    requestData->cmdUrlTimestamp = Tcl_NewBooleanObj(1);
+    requestData->cmdUrlTimestamp = Tcl_NewBooleanObj(WEBSH_CONFIG_DEFAULT_TIMESTAMP);
     Tcl_IncrRefCount(requestData->cmdUrlTimestamp);
 #endif
 

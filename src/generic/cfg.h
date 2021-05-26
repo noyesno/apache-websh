@@ -25,6 +25,16 @@
 
 #define WEB_CFG_ASSOC_DATA "web::cfgData"
 
+#define WEBSH_CONFIG_DEFAULT_TIMESTAMP 0
+#define WEBSH_CONFIG_DEFAULT_PUTXTAG   1
+#define WEBSH_CONFIG_DEFAULT_ENCRYPT   ""
+#define WEBSH_CONFIG_DEFAULT_DECRYPT   ""
+
+#if 0
+#define WEBSH_CONFIG_DEFAULT_ENCRYPT   "web::encryptd"
+#define WEBSH_CONFIG_DEFAULT_DECRYPT   "web::decryptd"
+#endif
+
 
 /* ----------------------------------------------------------------------------
  * CfgData
