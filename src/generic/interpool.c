@@ -113,7 +113,7 @@ static WebInterpClass *updateWebInterpClass(
 );
 
 
-static int readWebInterpClassCode(WebInterpClass * wi, char *filename, long mtime);
+static int readWebInterpClassCode(WebInterp *webInterp, char *filename, long mtime);
 // static void deleteInterpClass(WebInterpClass * webInterpClass);
 
 
@@ -538,7 +538,7 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
 
     // Tcl_Preserve(webInterp->interp);
 
-    /* just to be sure the memory command is imported if 
+    /* just to be sure the memory command is imported if
        the corresponding Tcl features it */
 #ifdef TCL_MEM_DEBUG
     Tcl_InitMemory(webInterp->interp);
@@ -548,11 +548,17 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
     result = Tcl_Init(webInterp->interp);
     /* checkme: test result */
 
+    webInterp->interpClass = webInterpClass;
     webInterp->code = NULL;
+
     if (webInterpClass->code == NULL) {
-	if (readWebInterpClassCode(webInterpClass, filename, mtime) != TCL_OK) {
-	    AP_LOG_RERROR(r, "Could not readWebInterpClassCode for %s: %s",
-			 filename, Tcl_GetStringResult(webInterpClass->conf->mainInterp));
+        /* XXX: Avoid using Tcl_Interp from other threads.
+        **      Use Tcl_Interp from current webInterp.
+        **      And load code into webInterp->interpClass->code
+        */
+	if (readWebInterpClassCode(webInterp, filename, mtime) != TCL_OK) {
+	    AP_LOG_RERROR(r, "Failed not read code from %s: %s", filename,
+                Tcl_GetStringResult(webInterp->interp));
 	}
     }
     if (webInterpClass->code != NULL) {
@@ -614,14 +620,13 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
     /* ------------------------------------------------------------------------
      * rename exit !
      * --------------------------------------------------------------------- */
-    code =
+    Tcl_Obj *initCode =
 	Tcl_NewStringObj
 	("rename exit exit.apache; proc exit {} {if {[info tclversion] >= 8.5} {return -level [expr {[info level] + 1}]} else {return -code error \"cannot exit script in mod_websh because process would terminate (use Tcl 8.5 or later if you want to use exit)\"}}", -1);
 
-    Tcl_IncrRefCount(code);
-    Tcl_EvalObjEx(webInterp->interp, code, 0);
-    Tcl_DecrRefCount(code);
-
+    Tcl_IncrRefCount(initCode);
+    Tcl_EvalObjEx(webInterp->interp, initCode, 0);
+    Tcl_DecrRefCount(initCode);
     Tcl_ResetResult(webInterp->interp);
 
     time_t t;
@@ -632,7 +637,6 @@ static WebInterp *poolCreateWebInterp(websh_server_conf * conf,
     webInterp->numrequests = 0;
     webInterp->starttime    = t;
     webInterp->lastusedtime = t;
-    webInterp->interpClass = webInterpClass;
     webInterp->id = webInterpClass->nextid++;
     webInterp->originThrdId = Tcl_GetCurrentThread();
 
@@ -1203,11 +1207,12 @@ void cleanupPool(WebshPool *webshPool)
 /* ----------------------------------------------------------------------------
  * readWebInterpClassCode
  * ------------------------------------------------------------------------- */
-static int readWebInterpClassCode(WebInterpClass * webInterpClass, char *filename, long mtime)
+static int readWebInterpClassCode(WebInterp *webInterp, char *filename, long mtime)
 {
 
+    WebInterpClass *webInterpClass =  webInterp->interpClass;
+    Tcl_Interp *interp = webInterp->interp;
     Tcl_Channel chan;
-    Tcl_Interp *interp = webInterpClass->conf->mainInterp;
 
     chan = Tcl_OpenFileChannel(interp, filename, "r", 0644);
     if (chan == (Tcl_Channel) NULL) {
