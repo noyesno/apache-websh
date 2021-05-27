@@ -20,6 +20,11 @@ namespace eval web {
   variable error ""
 }
 
+proc web::main {body} {
+  proc start {args} $body
+  uplevel 1 web::start
+}
+
 proc web::error {args} {
   variable error
 

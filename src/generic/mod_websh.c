@@ -259,9 +259,13 @@ static int websh_run_script(request_rec * r)
 
       int res;
 
-      Tcl_IncrRefCount(webInterp->code);
-      res = Tcl_EvalObjEx(webInterp->interp, webInterp->code, 0);
-      Tcl_DecrRefCount(webInterp->code);
+      if(Tcl_FindCommand(webInterp->interp, "web::start", NULL, TCL_GLOBAL_ONLY)!=NULL){
+        res = Tcl_Eval(webInterp->interp, "web::start");
+      }else{
+        Tcl_IncrRefCount(webInterp->code);
+        res = Tcl_EvalObjEx(webInterp->interp, webInterp->code, 0);
+        Tcl_DecrRefCount(webInterp->code);
+      }
 
       if (res != TCL_OK) {
 	  expireWebInterp(webInterp);  // XXX: mark this interp as expired
