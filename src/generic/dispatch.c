@@ -390,7 +390,7 @@ int Web_Dispatch(ClientData clientData,
 	    if (res == TCL_ERROR) {
 
                 Tcl_Obj *options = Tcl_GetReturnOptions(interp, res);
-                Tcl_Obj *errorVar= Tcl_NewStringObj("::web::error", -1);
+                Tcl_Obj *errorVar= Tcl_NewStringObj("::web::errorinfo", -1);
                 // Tcl_IncrRefCount(options);
                 Tcl_ObjSetVar2(interp, errorVar, NULL, options, TCL_GLOBAL_ONLY | TCL_LEAVE_ERR_MSG); // TCL_GLOBAL_ONLY
 

@@ -17,23 +17,30 @@
 # namespace init (make sure web:: exists)
 #-----------------------------------------------------------------------------
 namespace eval web {
-  variable error ""
+  variable errorinfo {-errorcode "" -errorinfo "" -errorstack ""}
+  # -errorinfo : holds a stack trace of the operations, human-readable
+  # -errorcode : holds a Tcl list of items, intended to be machine-readable
+  # -errorline : supply detailed error location information in the stack trace
+  # -code , -level
+
+  proc errorinfo {args} {
+    variable errorinfo
+    return [dict get $errorinfo -errorinfo]
+  }
+  proc errorcode {args} {
+    variable errorinfo
+    return [dict get $errorinfo -errorcode]
+  }
+
+  proc errorstack {args} {
+    variable errorinfo
+    return [dict get $errorinfo -errorstack]
+  }
 }
 
 proc web::main {body} {
   proc start {args} $body
   uplevel 1 web::start
-}
-
-proc web::error {args} {
-  variable error
-
-  if {[llength $args]==0} {
-    return $error
-  }
-
-  set name [lindex $args 0]
-  return [dict get $error $name]
 }
 
 #-----------------------------------------------------------------------------
@@ -128,11 +135,23 @@ proc web::uri2list {string} {
 
     # special case: must return a list with an even # of elements
     set res ""
-    foreach item [split $string &] {
-	set kv [split $item =]
-	if [llength $kv] {
-	    lappend res [uridecode [lindex $kv 0]] [uridecode [lindex $kv 1]]
-	}
+    foreach item [split $string "&"] {
+	# set kv [split $item =]
+	# if [llength $kv] {
+	#     lappend res [uridecode [lindex $kv 0]] [uridecode [lindex $kv 1]]
+	# }
+
+        set pos [string first "=" $item]
+        if {$pos>=0} {
+          set name  [string range $item 0 $pos-1]
+          set value [string range $item $pos+1 end]
+        } else {
+          set name  $item
+          set value ""
+        }
+        if {[string length $name]>0} {
+	  lappend res [uridecode $name] [uridecode $value]
+        }
     }
     return $res
 }
