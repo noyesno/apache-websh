@@ -79,6 +79,7 @@ test putx-2.2 {web::putx with command} {
     if {[info exists bVar]} {unset bVar}
     web::response -select #bVar
     web::response -sendheader 0
+    web::config putxmarkup brace
 
     set tmp2 "try this {web::put Test} here"
     catch {web::putx #bVar $tmp2} msg
@@ -92,6 +93,7 @@ test putx-2.3 {web::putx nested} {
     if {[info exists bVar]} {unset bVar}
     web::response -select #bVar
     web::response -sendheader 0
+    web::config putxmarkup brace
 
     catch {
 web::putx {test
@@ -116,6 +118,7 @@ foreach var [info vars eval2_*] {
 test putx-2.4 {special syntax} {
     web::response -select #eval2_4
     web::response -sendheader 0
+    web::config putxmarkup brace
     web::putx #eval2_4 {*{web::put "\}"; web::put hallo}*}
     set eval2_4
 } "*\}hallo*"
@@ -123,6 +126,7 @@ test putx-2.4 {special syntax} {
 test putx-2.5 {escaping} {
     web::response -select #eval2_5
     web::response -sendheader 0
+    web::config putxmarkup brace
     web::putx {*\{noeval\}{web::put "eval this"}*}
     set eval2_5
 } {*{noeval}eval this*}
@@ -130,6 +134,7 @@ test putx-2.5 {escaping} {
 test putx-2.6 {escaped paren} {
     web::response -select #eval2_6
     web::response -sendheader 0
+    web::config putxmarkup brace
     web::putx {\{ bla \}}
     set eval2_6
 } "{ bla }"

@@ -30,7 +30,7 @@ test mintest-1.1 {create an interpreter, load websh3 library} {} {
     puts $fh {set res $msg}
     puts $fh {load $env(WEB_LIBRARY)}
     puts $fh {catch {web::encrypt test} msg}
-    puts $fh {lappend res $msg}
+    puts $fh {append res " | " $msg}
     puts $fh {puts $res}
     close $fh
     set fnb "mintest1_1b.tcl"
@@ -61,7 +61,7 @@ test mintest-1.1 {create an interpreter, load websh3 library} {} {
     file delete -force $fna
     file delete -force $fnb
     set res
-} {invalid command name web::encrypt XDq3pUAU8b}
+} {invalid command name "web::encrypt" | test}
 
 # cleanup
 ::tcltest::cleanupTests
