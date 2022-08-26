@@ -28,6 +28,7 @@
 int parsePostData(Tcl_Interp * interp, Tcl_Obj * name,
 		  Tcl_Obj * type, Tcl_Obj * len, RequestData * requestData);
 
+static Tcl_Obj *errorVar = NULL;
 
 /* ----------------------------------------------------------------------------
  * Web_Dispatch
@@ -359,6 +360,7 @@ int Web_Dispatch(ClientData clientData,
 	else {
 
 	    Tcl_Obj *hook = NULL;
+	    Tcl_Obj *code = NULL;
 
 	    /* first eval hook, if any */
 	    hook = argValueOfKey(objc, objv, (char *)params[HOOK]);
@@ -380,20 +382,16 @@ int Web_Dispatch(ClientData clientData,
 		}
 	    }
 
-	    /* reuse var hook */
-	    Tcl_ListObjIndex(interp, cmdCode, 0, &hook);
-
-	    Tcl_IncrRefCount(hook);
-	    res = Tcl_EvalObjEx(interp, hook, TCL_EVAL_DIRECT);
-	    Tcl_DecrRefCount(hook);
+	    Tcl_ListObjIndex(interp, cmdCode, 0, &code);
+	    Tcl_IncrRefCount(code);
+	    res = Tcl_EvalObjEx(interp, code, TCL_EVAL_DIRECT);
+	    Tcl_DecrRefCount(code);
 
 	    if (res == TCL_ERROR) {
+		if(errorVar==NULL) errorVar = Tcl_NewStringObj("::web::errorinfo", -1);
 
-                Tcl_Obj *options = Tcl_GetReturnOptions(interp, res);
-                Tcl_Obj *errorVar= Tcl_NewStringObj("::web::errorinfo", -1);
-                // Tcl_IncrRefCount(options);
-                Tcl_ObjSetVar2(interp, errorVar, NULL, options, TCL_GLOBAL_ONLY | TCL_LEAVE_ERR_MSG); // TCL_GLOBAL_ONLY
-
+                Tcl_Obj *errOptions = Tcl_GetReturnOptions(interp, res); // unshared Tcl_Obj
+                Tcl_ObjSetVar2(interp, errorVar, NULL, errOptions, TCL_GLOBAL_ONLY); // TCL_LEAVE_ERR_MSG
 
 		LOG_MSG(interp, WRITE_LOG | SET_RESULT | INTERP_ERRORINFO,
 			__FILE__, __LINE__,

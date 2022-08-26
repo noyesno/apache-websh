@@ -363,6 +363,9 @@ int destroyOutData(ClientData clientData, Tcl_Interp * interp)
 /* ----------------------------------------------------------------------------
  * webout_eval_tag (code in <? ?>)
  * ------------------------------------------------------------------------- */
+#define PUTX_SUBST_IGNORE    0          // <? set abc 123 ?>
+#define PUTX_SUBST_RESULT    1          // <?= set abc 123 ?>
+#define PUTX_SUBST_VARIABLE  2          // <?= $abc ?>
 int webout_eval_tag(Tcl_Interp * interp, ResponseObj * responseObj,
 		    Tcl_Obj * in, TCLCONST char *strstart, TCLCONST char *strend)
 {
@@ -378,7 +381,7 @@ int webout_eval_tag(Tcl_Interp * interp, ResponseObj * responseObj,
   int inside = 0;
   int inLen = 0;
   int res = 0;
-  int subst_result = 0;
+  int subst_result = PUTX_SUBST_IGNORE;
 
   next = Tcl_GetStringFromObj(in, &inLen);
   outbuf = Tcl_NewStringObj("", -1);
@@ -425,17 +428,28 @@ int webout_eval_tag(Tcl_Interp * interp, ResponseObj * responseObj,
 
         /* see <?= ... ?> */
         if(next[0] == '='){
-          subst_result = 1;
+          subst_result = PUTX_SUBST_RESULT;
           next++;  // skip '='
+          while(next[0]==' ' || next[0]=='\t') next++;
+          if(next[0]=='$') {
+            subst_result = PUTX_SUBST_VARIABLE;
+          }
         } else {
-          subst_result = 0;
+          subst_result = PUTX_SUBST_IGNORE;
         }
 
         /* TODO: <?= $var ?>  , {{$var}}, [[set var]] */
 
-        if(subst_result){
-          /* subst result */
-	  Tcl_AppendToObj(outbuf, "web::put [", -1);
+	switch(subst_result){
+	    case PUTX_SUBST_IGNORE:
+	      break;
+	    case PUTX_SUBST_RESULT:
+              /* subst result */
+	      Tcl_AppendToObj(outbuf, "web::put [", -1);
+	      break;
+	    case PUTX_SUBST_VARIABLE:
+	      Tcl_AppendToObj(outbuf, "web::put ", -1);
+	      break;
         }
       }  else {
 	Tcl_AppendToObj(outbuf, cur, startseqlen);
@@ -449,8 +463,10 @@ int webout_eval_tag(Tcl_Interp * interp, ResponseObj * responseObj,
       if ((--inside) == 0) {
 
         /* subst result */
-        if(subst_result){
+        if(subst_result==PUTX_SUBST_RESULT){
 	  Tcl_AppendToObj(outbuf, "]", -1);
+        }else if(subst_result==PUTX_SUBST_VARIABLE){
+	  Tcl_AppendToObj(outbuf, "", -1);
         }
 
 	Tcl_AppendToObj(outbuf, "\nweb::put \"", -1);
